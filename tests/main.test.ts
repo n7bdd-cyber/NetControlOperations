@@ -345,6 +345,23 @@ describe('recordCheckin', () => {
     expect(r).toEqual({ ok: false, error: 'INVALID_CALLSIGN' });
   });
 
+  // Defensive at the server: even if a client (or a future direct API caller)
+  // submits a malformed callsign, recordCheckin must reject it the same way
+  // it rejects other ill-formed input. The client's job is to route the user
+  // to a friendlier message (e.g. suffix-only → "type the full callsign");
+  // the server's job is to refuse the data.
+  it.each([
+    ['bare suffix', 'ABC'],
+    ['no trailing letters', 'K7'],
+    ['all digits', '12345'],
+    ['leading digit', '7ABC'],
+    ['no digit at all', 'WABCXYZ'],
+  ])('returns INVALID_CALLSIGN for malformed callsign %s (%s)', (_label, cs) => {
+    bootstrap();
+    const r = recordCheckin({ sessionId: 'whatever', callsign: cs, eventId: 'evt-1' });
+    expect(r).toEqual({ ok: false, error: 'INVALID_CALLSIGN' });
+  });
+
   it('returns INVALID_INPUT for empty eventId', () => {
     bootstrap();
     const r = recordCheckin({ sessionId: 'whatever', callsign: 'K7XYZ', eventId: '' });

@@ -4,18 +4,33 @@
  * Teaching notes:
  *  - Every exported function takes `unknown` (or `string`) and returns a
  *    plain `boolean`. Pure logic; no side effects; trivially testable.
- *  - The regexes are deliberately permissive at the format level — the
- *    real "is this a known callsign" check happens later via the roster
- *    (Sunday-Sync slice, not Slice 1).
+ *  - Callsign format validation classifies user input into three buckets:
+ *    a full FCC callsign (submit), a bare suffix (the client surfaces a
+ *    "type the full callsign" message until Suffix-Tap is built), or
+ *    neither (existing INVALID_INPUT path). The "real" name lookup happens
+ *    later via the roster (Sunday-Sync slice, not Slice 1).
  */
 
 import { MAX_NET_TYPE, MAX_REPEATER, MAX_PURPOSE_NOTES, MAX_CALLSIGN } from './types';
 
-// Callsign: 2-7 ALL-CAPS alphanumeric, optional /SUFFIX of 1-5 ALL-CAPS alphanumeric.
-// Accepts: W7ABC, KE7XYZ, W7ABC/M, W7ABC/MM, W7ABC/QRP, KH6/W7ABC, K7XYZ/3
-// Rejects: empty, single char, lowercase, special chars other than `/`, >12 chars total,
-//          starts or ends with `/`, multiple `/`.
-const CALLSIGN_RE = /^[A-Z0-9]{2,7}(?:\/[A-Z0-9]{1,5})?$/;
+// Full FCC callsign:
+//   optional DX prefix  (1-3 letters + digit + 0-2 letters, then `/`) — KH6/, KP4/, AL7/, ...
+//   required base       (1-2 letters + 1 digit + 1-3 letters)         — W7ABC, KE7XYZ, K7A
+//   optional secondary  (`/` + 1-5 alphanumeric)                      — /M, /P, /MM, /QRP, /3
+// Accepts: W7ABC, K7A, KE7XYZ, W7ABC/M, W7ABC/P, W7ABC/MM, W7ABC/QRP, KH6/W7ABC, K7XYZ/3
+// Rejects: empty, single char, lowercase, special chars other than `/`, trailing/leading/
+//          double slash, anything without the letters-digit-letters base structure
+//          (e.g. bare suffix "ABC", all digits "12345", "K7" with no trailing letters,
+//          "7ABC" starting with a digit). The bare-suffix case is what the SUFFIX_ONLY_RE
+//          below catches separately so the client can show a targeted message.
+const CALLSIGN_RE =
+  /^(?:[A-Z]{1,3}[0-9][A-Z]{0,2}\/)?[A-Z]{1,2}[0-9][A-Z]{1,3}(?:\/[A-Z0-9]{1,5})?$/;
+
+// Suffix-only: 1-3 ALL-CAPS letters, no digit, no slash.
+// Used to detect when the user typed only the suffix part of a callsign so the
+// client can route them to a "type the full callsign" message in Slice 1, and
+// to a roster-lookup candidate list when Suffix-Tap (FR-3) lands.
+const SUFFIX_ONLY_RE = /^[A-Z]{1,3}$/;
 
 // ISO date: YYYY-MM-DD, month 01-12, day 01-31 (does not validate calendar — 2026-02-30 passes).
 const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
@@ -25,6 +40,10 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export function isValidCallsign(s: unknown): s is string {
   return typeof s === 'string' && s.length <= MAX_CALLSIGN && CALLSIGN_RE.test(s);
+}
+
+export function isLikelySuffixOnly(s: unknown): s is string {
+  return typeof s === 'string' && SUFFIX_ONLY_RE.test(s);
 }
 
 export function isValidIsoDate(s: unknown): s is string {

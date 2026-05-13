@@ -3,7 +3,15 @@
     "allow": [
       "WebFetch(domain:www.getopenclaw.ai)",
       "WebSearch",
-      "Bash(git -C \"C:\\\\Users\\\\bsdar\\\\OneDrive\\\\Documents\\\\Git\\\\NetControlOperations\" ls-files)"
+      "Bash(git -C \"C:\\\\Users\\\\bsdar\\\\OneDrive\\\\Documents\\\\Git\\\\NetControlOperations\" ls-files)",
+      "Bash(git rm *)",
+      "Bash(npx eslint *)",
+      "Bash(npx tsc *)",
+      "Bash(npx jest *)",
+      "Bash(git *)",
+      "Bash(npm run *)",
+      "Bash(npx clasp *)",
+      "Bash(node -e ' *)"
     ]
   }
 }

@@ -9,6 +9,7 @@
 
 import {
   isValidCallsign,
+  isLikelySuffixOnly,
   isValidIsoDate,
   isValidIsoTime,
   clampString,
@@ -17,12 +18,19 @@ import {
 } from '../src/server/validators';
 
 describe('isValidCallsign', () => {
-  it.each(['W7ABC', 'KE7XYZ', 'W7ABC/M', 'W7ABC/P', 'W7ABC/MM', 'W7ABC/QRP', 'KH6/W7ABC', 'K7XYZ/3'])(
-    'accepts %s',
-    (cs) => {
-      expect(isValidCallsign(cs)).toBe(true);
-    },
-  );
+  it.each([
+    'W7ABC', // 1L + digit + 3L (US base form, single-letter prefix)
+    'K7A', // 1L + digit + 1L (shortest US base form)
+    'KE7XYZ', // 2L + digit + 3L (US base form, two-letter prefix)
+    'W7ABC/M', // base + /M (mobile)
+    'W7ABC/P', // base + /P (portable)
+    'W7ABC/MM', // base + /MM (maritime mobile)
+    'W7ABC/QRP', // base + /QRP (low-power indicator)
+    'KH6/W7ABC', // DX prefix + base (Hawaii indicator)
+    'K7XYZ/3', // base + /3 (numeric region indicator)
+  ])('accepts %s', (cs) => {
+    expect(isValidCallsign(cs)).toBe(true);
+  });
 
   it.each([
     ['empty', ''],
@@ -33,6 +41,16 @@ describe('isValidCallsign', () => {
     ['leading slash', '/W7ABC'],
     ['double slash', 'W7ABC//M'],
     ['too long', 'W7ABCDEFG/QRPMM'],
+    // Cases the OLD permissive regex (^[A-Z0-9]{2,7}...$) accepted but the
+    // tightened FCC-shape regex must reject:
+    ['bare suffix 3 letters', 'ABC'], // the bug report case
+    ['bare suffix 2 letters', 'AB'],
+    ['bare suffix 1 letter', 'A'],
+    ['all digits', '12345'],
+    ['no trailing letters', 'K7'], // would be a valid prefix in slashed form, not a full callsign
+    ['no leading letters', '7ABC'], // starts with a digit
+    ['two digits in middle', 'W77ABC'],
+    ['no digit at all', 'WABCXYZ'],
   ])('rejects %s (%s)', (_label, cs) => {
     expect(isValidCallsign(cs)).toBe(false);
   });
@@ -41,6 +59,36 @@ describe('isValidCallsign', () => {
     expect(isValidCallsign(null)).toBe(false);
     expect(isValidCallsign(undefined)).toBe(false);
     expect(isValidCallsign(123)).toBe(false);
+  });
+});
+
+// isLikelySuffixOnly classifies an input that LOOKS like just the suffix part
+// of a US FCC callsign (1-3 ALL-CAPS letters, no digit). Used by the client to
+// show a "type the full callsign" message until Suffix-Tap (FR-3) lands, and
+// later by Suffix-Tap itself as the entry condition for the roster-lookup
+// candidate-list flow.
+describe('isLikelySuffixOnly', () => {
+  it.each(['A', 'AB', 'ABC', 'XYZ', 'K'])('accepts %s as suffix-only', (s) => {
+    expect(isLikelySuffixOnly(s)).toBe(true);
+  });
+
+  it.each([
+    ['empty', ''],
+    ['four letters', 'ABCD'],
+    ['contains digit', 'AB7'],
+    ['full callsign', 'W7ABC'],
+    ['lowercase', 'abc'],
+    ['with slash', 'A/B'],
+    ['leading digit', '7AB'],
+    ['special char', 'A@B'],
+  ])('rejects %s (%s)', (_label, s) => {
+    expect(isLikelySuffixOnly(s)).toBe(false);
+  });
+
+  it('rejects non-string input', () => {
+    expect(isLikelySuffixOnly(null)).toBe(false);
+    expect(isLikelySuffixOnly(undefined)).toBe(false);
+    expect(isLikelySuffixOnly(42)).toBe(false);
   });
 });
 

@@ -97,7 +97,15 @@ export const PROP_ADMIN_EMAILS = 'AdminEmails';
 export const MAX_NET_TYPE = 100;
 export const MAX_REPEATER = 100;
 export const MAX_PURPOSE_NOTES = 500;
-export const MAX_CALLSIGN = 12;
+// MAX_CALLSIGN: chosen to fit the longest string the callsign regex in
+// src/server/validators.ts can match — DX prefix `AAA0AA/` (7) + base `KE7XYZ`
+// (6) + secondary `/QRPMM` (6) = 19. Rounded down to 18 because real-world
+// callsigns top out around 14 chars (e.g. KH6/KE7XYZ/QRP) and an 18-char
+// cap leaves a small safety margin without permitting nonsense like
+// `AAA0AA/KE7XYZ/QRPMM`. Keep this in sync with the `maxlength` attributes
+// on f-nco and f-callsign in src/html/index.html and with the client-side
+// length guard in `validCallsign` there.
+export const MAX_CALLSIGN = 18;
 export const MAX_ID_FIELD = 64; // requestId, eventId, sessionId
 
 // ---------------------------------------------------------------------------
