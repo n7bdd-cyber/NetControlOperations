@@ -969,6 +969,9 @@ Plus sections: "Local development" (`npm run lint`, `npm run typecheck`, `npm ru
 - **Husky / lint-staged pre-commit hooks.**
 - **Client-side jest tests via jsdom.**
 - **Real date validation** (calendar correctness; current regex accepts 2026-02-30).
+- **`endSession` cached counts on already-closed retries** (round-2 precommit-review deferral, 2026-05-13) — today the full Checkins scan happens before the `alreadyClosed` short-circuit, so idempotent retries pay the scan cost every time. Cheap for Slice 1 volumes; meaningful at monthly-rollup scale. Pick up in the **FR-12 monthly-trigger slice**: persist `checkinCount`/`uniqueCallsignCount` into the Sessions row on the close transition; on retry, read the cached values and skip the scan.
+- **`callWithRetry` jitter on BUSY backoff** (round-2 precommit-review deferral, 2026-05-13) — Slice 1's `src/html/index.html` uses fixed 250/500/1000 ms backoffs with no jitter. Single-NCO is fine; many NCOs in lockstep would create a thundering herd. Pick up in the **FR-16 multi-NCO handoff slice**: add 0–100 ms random jitter (`backoffs[i] + Math.floor(Math.random() * 100)`).
+- **esbuild `this[k] = __app__[k]` smoke test** (round-2 precommit-review deferral, 2026-05-13) — the IIFE-with-footer hoist in `scripts/build.mjs` is the documented pattern but isn't covered by an assertion. Pick up the next time `scripts/build.mjs` is touched or the esbuild major is bumped: after the build, read `dist/Code.gs` and assert the footer text (or a known exported name on `globalThis`) is present.
 
 ---
 

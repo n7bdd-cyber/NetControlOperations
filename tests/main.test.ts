@@ -12,7 +12,7 @@
 
 jest.mock('../src/server/timestamps', () => ({
   nowIso: jest.fn(() => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const hook = require('./setup').nowIsoMockHook as () => string;
     return hook();
   }),
@@ -402,6 +402,38 @@ describe('endSession', () => {
     const sessionRow = getMockSheet('Sessions')![1];
     expect(sessionRow[SessionsCol.Status]).toBe('Closed');
     expect(sessionRow[SessionsCol.EndTimestamp]).toBe('2026-05-12T19:30:00.000Z');
+  });
+
+  it('duplicate (sessionId, callsign) rows count as one unique callsign', () => {
+    // Defensive regression: recordCheckin enforces one row per (sessionId,
+    // callsign), but a future writer (Sunday-Sync import, backfill, manual
+    // edit) could violate that invariant. uniqueCallsignCount feeds the EC
+    // monthly hours report, so silently double-counting would publish bad
+    // numbers. Seed a duplicate row directly into the mock sheet and assert
+    // uniqueCallsignCount stays at 1 while checkinCount still sums TapCount.
+    const sessionId = startGoodSession();
+    recordCheckin({ sessionId, callsign: 'K7XYZ', eventId: 'e1' });
+    const checkinsSheet = getMockSheet('Checkins')!;
+    checkinsSheet.push([
+      'checkin-uuid-dup',
+      sessionId,
+      'K7XYZ',
+      '2026-05-12T19:01:00.000Z',
+      '2026-05-12T19:01:00.000Z',
+      2, // simulate a duplicate row carrying its own TapCount
+      'admin@example.com',
+      'Manual',
+      'admin@example.com',
+      'e-dup',
+    ]);
+    setMockNowIso('2026-05-12T19:30:00.000Z');
+    const r = endSession({ sessionId });
+    expect(r).toMatchObject({
+      ok: true,
+      checkinCount: 3, // 1 (from recordCheckin) + 2 (from the seeded duplicate)
+      uniqueCallsignCount: 1, // NOT 2 — invariant-safe
+      hoursTotal: 0.5, // 1 * 0.5
+    });
   });
 
   it('zero check-ins: counts 0, hours 0, status Closed', () => {

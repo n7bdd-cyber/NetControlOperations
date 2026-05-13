@@ -275,15 +275,21 @@ export function endSession(input: EndSessionInput): EndSessionResult {
     if (sessionRowIdx < 0) return { ok: false, error: 'SESSION_NOT_FOUND' as const };
 
     // Tally Checkins for this session.
+    // Why a Set rather than a row counter: recordCheckin enforces one row per
+    // (sessionId, callsign), but a future writer (Sunday-Sync import, backfill,
+    // manual edit) could violate that. Counting unique callsigns directly keeps
+    // the EC volunteer-hours number (uniqueCallsignCount * 0.5) honest even if
+    // the invariant slips.
     const allCheckins = checkins.getDataRange().getValues();
     let checkinCount = 0;
-    let uniqueCallsignCount = 0;
+    const callsigns = new Set<string>();
     for (let i = 1; i < allCheckins.length; i++) {
       const row = allCheckins[i];
       if (String(row[CheckinsCol.SessionID]) !== input.sessionId) continue;
-      uniqueCallsignCount += 1;
+      callsigns.add(String(row[CheckinsCol.Callsign]));
       checkinCount += Number(row[CheckinsCol.TapCount]) || 0;
     }
+    const uniqueCallsignCount = callsigns.size;
     const hoursTotal = uniqueCallsignCount * 0.5;
     const spreadsheetUrl = ss.getUrl();
 
