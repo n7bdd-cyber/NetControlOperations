@@ -7,10 +7,16 @@
  *  - esbuild's `format: 'iife'` wraps the bundled code in:
  *        var __app__ = (() => { ...; return { doGet, startSession, ... }; })();
  *    so all our exported functions land on the `__app__` object.
- *  - The `footer` then loops over `__app__` and copies each function onto `this`,
- *    which in Apps Script V8 at file scope IS the global object. That's how
- *    `doGet`, `startSession`, etc. become top-level Apps Script functions reachable
- *    by `google.script.run.<funcName>` from the client.
+ *  - The `footer` then emits EXPLICIT top-level function declarations that proxy
+ *    into `__app__`. Why declarations rather than `this[k] = __app__[k]` property
+ *    assignment: Apps Script's script editor populates its "Run" dropdown and
+ *    discovers web-app / trigger entry points by STATIC parsing of the deployed
+ *    code, looking for `function name() { ... }` declarations. Property assignment
+ *    is invisible to that static scan even though the function would be callable
+ *    at runtime — so the dropdown comes up empty and human-triggered runs (like
+ *    the first-time `setupSheets()` call) have nowhere to start.
+ *  - The shims forward `arguments` so they're robust to signature changes in
+ *    `main.ts` (e.g. when `doGet` starts taking the event object).
  *  - We use `await import()` for esbuild and `node:fs/promises` for file ops — no
  *    callbacks; modern async/await throughout.
  */
@@ -38,7 +44,15 @@ async function main() {
     outfile: DIST_CODE,
     format: 'iife',
     globalName: '__app__',
-    footer: { js: 'for (var k in __app__) { this[k] = __app__[k]; }' },
+    footer: {
+      js: [
+        'function doGet() { return __app__.doGet.apply(this, arguments); }',
+        'function startSession() { return __app__.startSession.apply(this, arguments); }',
+        'function recordCheckin() { return __app__.recordCheckin.apply(this, arguments); }',
+        'function endSession() { return __app__.endSession.apply(this, arguments); }',
+        'function setupSheets() { return __app__.setupSheets.apply(this, arguments); }',
+      ].join('\n'),
+    },
     target: 'es2020',
     platform: 'neutral',
     charset: 'utf8',
