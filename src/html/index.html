@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WashCoARES Net Control</title>
+    <style>
+      /* Slice 1 visual baseline. WCAG-AA contrast; 48px tap targets. */
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        font-size: 18px;
+        color: #111;
+        background: #fff;
+      }
+      main {
+        max-width: 480px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+      section { display: none; }
+      section.active { display: block; }
+      h1 { font-size: 22px; margin: 0 0 12px; }
+      h2 { font-size: 18px; margin: 0 0 8px; color: #333; }
+      label {
+        display: block;
+        margin-top: 12px;
+        font-weight: 600;
+      }
+      input, textarea, button {
+        font-size: 18px;
+        font-family: inherit;
+        width: 100%;
+        min-height: 48px;
+        padding: 8px 12px;
+        margin-top: 4px;
+        border: 1px solid #999;
+        border-radius: 6px;
+      }
+      textarea { min-height: 96px; resize: vertical; }
+      button {
+        background: #0b69d3;
+        color: #fff;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 16px;
+      }
+      button.secondary { background: #777; }
+      button:disabled { background: #aaa; cursor: not-allowed; }
+      input:focus, textarea:focus, button:focus {
+        outline: 3px solid #ffbf47;
+        outline-offset: 2px;
+      }
+      .field-error {
+        color: #b00020;
+        font-size: 15px;
+        margin: 4px 0 0;
+        min-height: 18px;
+      }
+      .row-controls {
+        display: flex;
+        gap: 8px;
+      }
+      .row-controls input { flex: 1; }
+      .row-controls button { width: auto; min-width: 96px; margin-top: 4px; }
+      .header-strip {
+        background: #f4f6f8;
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 12px;
+      }
+      .counters { color: #555; font-size: 16px; }
+      .checkin-list {
+        list-style: none;
+        padding: 0;
+        margin: 12px 0;
+      }
+      .checkin-list li {
+        padding: 12px;
+        border-bottom: 1px solid #eee;
+        font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+        display: flex;
+        justify-content: space-between;
+      }
+      .checkin-list li.flash { animation: flash 0.6s; }
+      @keyframes flash {
+        from { background: #fff5cc; }
+        to { background: transparent; }
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        background: #222;
+        color: #fff;
+        padding: 12px 16px;
+        border-radius: 6px;
+        max-width: 90%;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      }
+      .small { font-size: 15px; color: #555; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- Screen 1: Start -->
+      <section id="screen-start" class="active" aria-labelledby="start-title">
+        <h1 id="start-title">WashCoARES Net Control</h1>
+        <h2>Start a new net</h2>
+
+        <label for="f-date">Net date</label>
+        <input id="f-date" type="date" required />
+        <p id="e-date" class="field-error" role="alert"></p>
+
+        <label for="f-time">Net time</label>
+        <input id="f-time" type="time" required />
+        <p id="e-time" class="field-error" role="alert"></p>
+
+        <label for="f-net-type">Net type</label>
+        <input id="f-net-type" type="text" maxlength="100" required />
+        <p id="e-net-type" class="field-error" role="alert"></p>
+
+        <label for="f-nco">NCO callsign</label>
+        <input id="f-nco" type="text" maxlength="12" autocapitalize="characters" autocomplete="off" required />
+        <p id="e-nco" class="field-error" role="alert"></p>
+
+        <label for="f-repeater">Repeater (optional)</label>
+        <input id="f-repeater" type="text" maxlength="100" />
+
+        <label for="f-notes">Purpose / notes (optional)</label>
+        <textarea id="f-notes" maxlength="500"></textarea>
+
+        <button id="btn-start" type="button">Start Net</button>
+      </section>
+
+      <!-- Screen 2: Logging -->
+      <section id="screen-log" aria-labelledby="log-title">
+        <div class="header-strip">
+          <h1 id="log-title"><span id="hdr-nco"></span> &middot; <span id="hdr-type"></span> &middot; <span id="hdr-time"></span></h1>
+          <p class="counters"><span id="cnt-total">0</span> check-ins &middot; <span id="cnt-unique">0</span> unique</p>
+        </div>
+
+        <label for="f-callsign">Callsign</label>
+        <div class="row-controls">
+          <input id="f-callsign" type="text" maxlength="12" autocapitalize="characters" autocomplete="off" />
+          <button id="btn-log" type="button">LOG</button>
+        </div>
+        <p id="e-callsign" class="field-error" role="alert"></p>
+
+        <h2>Last check-ins</h2>
+        <ul id="checkin-list" class="checkin-list" aria-live="polite"></ul>
+
+        <button id="btn-end" class="secondary" type="button">End Net</button>
+      </section>
+
+      <!-- Screen 3: End confirm + summary -->
+      <section id="screen-end" aria-labelledby="end-title">
+        <h1 id="end-title">End net?</h1>
+        <p><span id="end-type"></span> &middot; <span id="end-time"></span></p>
+        <p class="counters">Total check-ins: <span id="end-total">0</span></p>
+        <p class="counters">Unique callsigns: <span id="end-unique">0</span></p>
+
+        <button id="btn-end-confirm" type="button">Confirm End</button>
+        <button id="btn-end-cancel" class="secondary" type="button">Cancel</button>
+      </section>
+
+      <section id="screen-summary" aria-labelledby="summary-title">
+        <h1 id="summary-title">Net ended</h1>
+        <p><span id="sum-total">0</span> check-ins logged.</p>
+        <p><span id="sum-unique">0</span> unique callsigns.</p>
+        <p><span id="sum-hours">0</span> hours total (flat 0.5/callsign).</p>
+
+        <a id="btn-open-sheet" href="#" target="_blank" rel="noopener"><button type="button">Open Sheet</button></a>
+        <button id="btn-new-net" class="secondary" type="button">Start new net</button>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="alert" hidden></div>
+
+    <script>
+      // -----------------------------------------------------------------
+      // uuid4 polyfill (handles older browsers without crypto.randomUUID).
+      // -----------------------------------------------------------------
+      function uuid4() {
+        if (typeof crypto !== 'undefined') {
+          if (typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+          }
+          if (typeof crypto.getRandomValues === 'function') {
+            var b = crypto.getRandomValues(new Uint8Array(16));
+            b[6] = (b[6] & 0x0f) | 0x40;
+            b[8] = (b[8] & 0x3f) | 0x80;
+            var h = [];
+            for (var i = 0; i < 16; i++) h.push(b[i].toString(16).padStart(2, '0'));
+            return h.slice(0, 4).join('') + '-' + h.slice(4, 6).join('') + '-' +
+                   h.slice(6, 8).join('') + '-' + h.slice(8, 10).join('') + '-' +
+                   h.slice(10, 16).join('');
+          }
+        }
+        // Last-resort non-cryptographic fallback for ancient browsers with no crypto at all.
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('uuid4: crypto unavailable; using Math.random (NOT cryptographically secure)');
+        }
+        var rh = function (n) {
+          var s = '';
+          for (var i = 0; i < n; i++) s += Math.floor(Math.random() * 16).toString(16);
+          return s;
+        };
+        return rh(8) + '-' + rh(4) + '-4' + rh(3) + '-' +
+               (8 + Math.floor(Math.random() * 4)).toString(16) + rh(3) + '-' + rh(12);
+      }
+
+      // -----------------------------------------------------------------
+      // Client-side validators (mirror server regexes).
+      // -----------------------------------------------------------------
+      var CALLSIGN_RE = /^[A-Z0-9]{2,7}(?:\/[A-Z0-9]{1,5})?$/;
+      var DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+      var TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+      function validCallsign(s) { return typeof s === 'string' && s.length <= 12 && CALLSIGN_RE.test(s); }
+      function validDate(s) { return typeof s === 'string' && DATE_RE.test(s); }
+      function validTime(s) { return typeof s === 'string' && TIME_RE.test(s); }
+
+      // -----------------------------------------------------------------
+      // In-memory client state. Wiped on refresh — Slice 1 accepts this.
+      // -----------------------------------------------------------------
+      var NetControl = {
+        sessionId: null,
+        netType: '', ncoCallsign: '', netTime: '',
+        checkins: new Map(),  // callsign -> { checkinId, firstTimestamp, latestTimestamp, tapCount }
+        history: [],          // ordered list of callsigns in event order (newest first)
+        inFlightStart: null,  // { requestId, input }
+        inFlightCheckin: null,// { eventId, callsign }
+      };
+
+      // -----------------------------------------------------------------
+      // UI helpers.
+      // -----------------------------------------------------------------
+      function $(id) { return document.getElementById(id); }
+      function showScreen(id) {
+        ['screen-start','screen-log','screen-end','screen-summary'].forEach(function (sid) {
+          $(sid).classList.toggle('active', sid === id);
+        });
+      }
+      function toast(message) {
+        var t = $('toast');
+        t.textContent = message;
+        t.hidden = false;
+        setTimeout(function () { t.hidden = true; }, 3000);
+      }
+      function setFieldError(errId, text) {
+        $(errId).textContent = text || '';
+      }
+      function clearAllStartErrors() {
+        ['e-date','e-time','e-net-type','e-nco'].forEach(function (id) { $(id).textContent = ''; });
+      }
+
+      function renderHeader() {
+        $('hdr-nco').textContent = NetControl.ncoCallsign;
+        $('hdr-type').textContent = NetControl.netType;
+        $('hdr-time').textContent = NetControl.netTime;
+        $('end-type').textContent = NetControl.netType;
+        $('end-time').textContent = NetControl.netTime;
+      }
+      function renderCounters() {
+        var total = 0;
+        NetControl.checkins.forEach(function (v) { total += v.tapCount; });
+        $('cnt-total').textContent = total;
+        $('cnt-unique').textContent = NetControl.checkins.size;
+        $('end-total').textContent = total;
+        $('end-unique').textContent = NetControl.checkins.size;
+      }
+      function renderList(flashCallsign) {
+        var ul = $('checkin-list');
+        ul.textContent = '';
+        var shown = NetControl.history.slice(0, 10);
+        shown.forEach(function (cs) {
+          var entry = NetControl.checkins.get(cs);
+          if (!entry) return;
+          var li = document.createElement('li');
+          if (cs === flashCallsign) li.className = 'flash';
+          var left = document.createElement('span');
+          left.textContent = cs;
+          var right = document.createElement('span');
+          right.textContent = '×' + entry.tapCount;
+          li.appendChild(left);
+          li.appendChild(right);
+          ul.appendChild(li);
+        });
+      }
+
+      // -----------------------------------------------------------------
+      // Server call helpers (Promise wrappers around google.script.run).
+      // -----------------------------------------------------------------
+      function callServer(method, payload) {
+        return new Promise(function (resolve, reject) {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)[method](payload);
+        });
+      }
+      function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+      // Retry an idempotent server call: 1 outer network-error retry, up to 3
+      // inner BUSY_TRY_AGAIN retries. Max 4 server calls total per logical action.
+      async function callWithRetry(method, payload) {
+        var networkRetries = 1;
+        while (true) {
+          try {
+            // Inner loop: handle BUSY_TRY_AGAIN.
+            var backoffs = [250, 500, 1000];
+            var lastResult = null;
+            for (var i = 0; i < backoffs.length + 1; i++) {
+              lastResult = await callServer(method, payload);
+              if (!(lastResult && lastResult.ok === false && lastResult.error === 'BUSY_TRY_AGAIN')) {
+                return lastResult;
+              }
+              if (i < backoffs.length) await sleep(backoffs[i]);
+            }
+            return lastResult;
+          } catch (err) {
+            if (networkRetries > 0) {
+              networkRetries -= 1;
+              toast('Network error — retrying.');
+              await sleep(500);
+              continue;
+            }
+            throw err;
+          }
+        }
+      }
+
+      // -----------------------------------------------------------------
+      // Screen 1: Start.
+      // -----------------------------------------------------------------
+      function todayLocalIso() {
+        var d = new Date();
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      }
+      function nowLocalHm() {
+        var d = new Date();
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        return pad(d.getHours()) + ':' + pad(d.getMinutes());
+      }
+      function initStartDefaults() {
+        $('f-date').value = todayLocalIso();
+        $('f-time').value = nowLocalHm();
+      }
+
+      async function onStart() {
+        clearAllStartErrors();
+        var input = {
+          date: $('f-date').value,
+          time: $('f-time').value,
+          netType: $('f-net-type').value.trim(),
+          ncoCallsign: $('f-nco').value.trim().toUpperCase(),
+          repeater: $('f-repeater').value,
+          purposeNotes: $('f-notes').value,
+        };
+        var ok = true;
+        if (!validDate(input.date)) { setFieldError('e-date', 'Date must look like 2026-05-12.'); ok = false; }
+        if (!validTime(input.time)) { setFieldError('e-time', 'Time must look like 19:00 (24-hour).'); ok = false; }
+        if (!input.netType) { setFieldError('e-net-type', 'Net type is required (max 100 chars).'); ok = false; }
+        if (!validCallsign(input.ncoCallsign)) { setFieldError('e-nco', 'Callsigns are letters, digits, and / only (e.g. W7ABC).'); ok = false; }
+        if (!ok) return;
+
+        // Preserve requestId across retries.
+        if (!NetControl.inFlightStart) {
+          NetControl.inFlightStart = { requestId: uuid4(), input: input };
+        }
+        $('btn-start').disabled = true;
+        try {
+          var result = await callWithRetry('startSession', Object.assign({ requestId: NetControl.inFlightStart.requestId }, input));
+          if (!result || !result.ok) {
+            if (result && result.error === 'BUSY_TRY_AGAIN') {
+              toast('Try again — system busy.');
+            } else if (result && result.error === 'INVALID_INPUT') {
+              setFieldError('e-' + result.field, result.reason || 'Invalid');
+            } else if (result && result.error === 'NOT_CONFIGURED') {
+              toast('App not configured — contact trustee.');
+            } else {
+              toast('Could not start net.');
+            }
+            return;
+          }
+          NetControl.sessionId = result.sessionId;
+          NetControl.netType = input.netType;
+          NetControl.ncoCallsign = input.ncoCallsign;
+          NetControl.netTime = input.time;
+          NetControl.inFlightStart = null;
+          renderHeader();
+          renderCounters();
+          renderList(null);
+          showScreen('screen-log');
+          setTimeout(function () { $('f-callsign').focus(); }, 0);
+        } catch (e) {
+          toast('Network error — try again.');
+        } finally {
+          $('btn-start').disabled = false;
+        }
+      }
+
+      // -----------------------------------------------------------------
+      // Screen 2: Logging.
+      // -----------------------------------------------------------------
+      async function onLog() {
+        setFieldError('e-callsign', '');
+        var raw = $('f-callsign').value.trim().toUpperCase();
+        if (!validCallsign(raw)) {
+          setFieldError('e-callsign', 'Callsigns are letters, digits, and / only (e.g. W7ABC, K7XYZ/M).');
+          return;
+        }
+        if (!NetControl.inFlightCheckin) {
+          NetControl.inFlightCheckin = { eventId: uuid4(), callsign: raw };
+        }
+        $('btn-log').disabled = true;
+        try {
+          var result = await callWithRetry('recordCheckin', {
+            sessionId: NetControl.sessionId,
+            callsign: raw,
+            eventId: NetControl.inFlightCheckin.eventId,
+          });
+          if (!result || !result.ok) {
+            if (result && result.error === 'SESSION_NOT_FOUND') {
+              toast('Session expired — start a new net.');
+              showScreen('screen-start');
+            } else if (result && result.error === 'SESSION_CLOSED') {
+              toast('Net already ended.');
+              showScreen('screen-start');
+            } else if (result && result.error === 'INVALID_CALLSIGN') {
+              setFieldError('e-callsign', 'Invalid callsign.');
+            } else if (result && result.error === 'BUSY_TRY_AGAIN') {
+              toast('Try again — system busy.');
+            } else {
+              toast('Could not log check-in.');
+            }
+            return;
+          }
+          // Update client state.
+          var existing = NetControl.checkins.get(raw);
+          var entry = existing || { checkinId: result.checkinId, firstTimestamp: '', latestTimestamp: '', tapCount: 0 };
+          entry.tapCount = result.tapCount;
+          NetControl.checkins.set(raw, entry);
+          // Move callsign to the top of history.
+          NetControl.history = [raw].concat(NetControl.history.filter(function (c) { return c !== raw; }));
+          NetControl.inFlightCheckin = null;
+          renderCounters();
+          renderList(result.deduped ? null : raw);
+          $('f-callsign').value = '';
+          $('f-callsign').focus();
+        } catch (e) {
+          toast('Network error — try again.');
+        } finally {
+          $('btn-log').disabled = false;
+        }
+      }
+
+      function onEndTap() {
+        showScreen('screen-end');
+      }
+      function onEndCancel() {
+        showScreen('screen-log');
+        setTimeout(function () { $('f-callsign').focus(); }, 0);
+      }
+      async function onEndConfirm() {
+        $('btn-end-confirm').disabled = true;
+        try {
+          var result = await callWithRetry('endSession', { sessionId: NetControl.sessionId });
+          if (!result || !result.ok) {
+            toast('Could not end net.');
+            return;
+          }
+          $('sum-total').textContent = result.checkinCount;
+          $('sum-unique').textContent = result.uniqueCallsignCount;
+          $('sum-hours').textContent = result.hoursTotal;
+          $('btn-open-sheet').href = result.spreadsheetUrl;
+          showScreen('screen-summary');
+        } catch (e) {
+          toast('Network error — try again.');
+        } finally {
+          $('btn-end-confirm').disabled = false;
+        }
+      }
+
+      function onNewNet() {
+        NetControl = {
+          sessionId: null,
+          netType: '', ncoCallsign: '', netTime: '',
+          checkins: new Map(),
+          history: [],
+          inFlightStart: null,
+          inFlightCheckin: null,
+        };
+        ['f-net-type','f-nco','f-repeater','f-notes','f-callsign'].forEach(function (id) {
+          var el = $(id); if (el) el.value = '';
+        });
+        clearAllStartErrors();
+        initStartDefaults();
+        showScreen('screen-start');
+      }
+
+      // -----------------------------------------------------------------
+      // Wire up event listeners on DOM ready.
+      // -----------------------------------------------------------------
+      document.addEventListener('DOMContentLoaded', function () {
+        initStartDefaults();
+        $('btn-start').addEventListener('click', onStart);
+        $('btn-log').addEventListener('click', onLog);
+        $('f-callsign').addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); onLog(); }
+        });
+        $('btn-end').addEventListener('click', onEndTap);
+        $('btn-end-cancel').addEventListener('click', onEndCancel);
+        $('btn-end-confirm').addEventListener('click', onEndConfirm);
+        $('btn-new-net').addEventListener('click', onNewNet);
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "name": "net-control-operations",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WashCoARES NCO callsign-only check-in logger (Slice 1: scaffolding + record-a-checkin spine)",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "push": "npm run build && npx clasp push",
+    "deploy": "npm run push && npx clasp deploy",
+    "redeploy": "npm run push && npx clasp deploy --deploymentId",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.3.0",
+    "@types/google-apps-script": "^1.0.97",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "esbuild": "^0.28.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.2.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.4.0"
+  }
+}

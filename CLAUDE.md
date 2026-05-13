@@ -46,7 +46,7 @@ The repo is not yet scaffolded. The slash commands above assume the following co
 | Local UI dev server | (TBD — static server on `http://localhost:8080`) |
 
 Layout (planned):
-- `src/` — TypeScript sources (server-side modules, types, validators)
+- `src/` — TypeScript sources (server-side modules, types, validators) and HtmlService templates
 - `src/server/` — Apps Script entry points (`doGet`, `doPost`) and Workspace-API wrappers
 - `src/html/` — HtmlService templates (`.html` files included in the Apps Script project)
 - `tests/` — Jest tests (`*.test.ts`); use `jest.fn()` doubles for Apps Script globals (`SpreadsheetApp`, `DriveApp`, `UrlFetchApp`, `Session`, `LockService`, `PropertiesService`)

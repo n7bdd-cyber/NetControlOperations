@@ -1,0 +1,454 @@
+/**
+ * Unit tests for src/server/main.ts (doGet, startSession, recordCheckin,
+ * endSession, setupSheets).
+ *
+ * Teaching notes:
+ *  - The `jest.mock(...)` call below MUST live at the top of THIS file so jest's
+ *    auto-hoisting can run it before any imports resolve. Putting it in
+ *    tests/setup.ts wouldn't hoist across files.
+ *  - The mock factory delegates to `nowIsoMockHook()` exported from setup.ts,
+ *    which reads the per-test value primed via `setMockNowIso(...)`.
+ */
+
+jest.mock('../src/server/timestamps', () => ({
+  nowIso: jest.fn(() => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const hook = require('./setup').nowIsoMockHook as () => string;
+    return hook();
+  }),
+}));
+
+import {
+  doGet,
+  startSession,
+  recordCheckin,
+  endSession,
+  setupSheets,
+} from '../src/server/main';
+import {
+  setMockProperty,
+  setMockUuids,
+  setMockNowIso,
+  setMockEmail,
+  setLockAvailable,
+  getMockSheet,
+  getLogCalls,
+  MOCK_SPREADSHEET_ID,
+  MOCK_SPREADSHEET_URL,
+} from './setup';
+// (resetMocks is registered globally inside setup.ts; no per-file registration needed.)
+import { CHECKINS_HEADERS, SESSIONS_HEADERS, CheckinsCol, SessionsCol } from '../src/server/types';
+
+// Convenience: create the Sessions and Checkins tabs so server functions
+// don't return NOT_CONFIGURED. Mimics what setupSheets does on first run.
+function bootstrap(): void {
+  setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+  setMockProperty('AdminEmails', 'trustee@example.com');
+  setMockEmail('trustee@example.com');
+  const setup = setupSheets();
+  expect(setup.ok).toBe(true);
+}
+
+// ---------------------------------------------------------------------------
+// doGet
+// ---------------------------------------------------------------------------
+
+describe('doGet', () => {
+  it('returns the friendly "not configured" output when SpreadsheetId is unset', () => {
+    doGet();
+    expect(HtmlService.createHtmlOutput).toHaveBeenCalledWith(
+      expect.stringContaining('App not configured'),
+    );
+    expect(HtmlService.createHtmlOutputFromFile).not.toHaveBeenCalled();
+  });
+
+  it('returns the index template when SpreadsheetId is set', () => {
+    setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+    doGet();
+    expect(HtmlService.createHtmlOutputFromFile).toHaveBeenCalledWith('index');
+  });
+
+  it('does NOT open the Spreadsheet (no Sheet read on page load)', () => {
+    setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+    doGet();
+    expect(SpreadsheetApp.openById).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setupSheets
+// ---------------------------------------------------------------------------
+
+describe('setupSheets', () => {
+  it('creates Sessions and Checkins tabs on first run', () => {
+    setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+    setMockProperty('AdminEmails', 'trustee@example.com');
+    setMockEmail('trustee@example.com');
+    const r = setupSheets();
+    expect(r).toEqual({ ok: true, created: ['Sessions', 'Checkins'] });
+    expect(getMockSheet('Sessions')?.[0]).toEqual(SESSIONS_HEADERS);
+    expect(getMockSheet('Checkins')?.[0]).toEqual(CHECKINS_HEADERS);
+  });
+
+  it('is idempotent: re-running returns created: [] and preserves data rows', () => {
+    bootstrap();
+    // Add a data row to Sessions.
+    const sessions = getMockSheet('Sessions')!;
+    sessions.push(['some-id', '2026-05-12', '...']);
+    const r = setupSheets();
+    expect(r).toEqual({ ok: true, created: [] });
+    // Data row preserved.
+    expect(sessions[1][0]).toBe('some-id');
+  });
+
+  it('returns NOT_AUTHORIZED when caller is not in AdminEmails', () => {
+    setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+    setMockProperty('AdminEmails', 'trustee@example.com');
+    setMockEmail('someone-else@example.com');
+    expect(setupSheets()).toEqual({ ok: false, error: 'NOT_AUTHORIZED' });
+  });
+
+  it('returns NOT_AUTHORIZED when AdminEmails is unset', () => {
+    setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+    setMockEmail('trustee@example.com');
+    expect(setupSheets()).toEqual({ ok: false, error: 'NOT_AUTHORIZED' });
+  });
+
+  it('returns NOT_AUTHORIZED when caller email is empty (cross-org)', () => {
+    setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+    setMockProperty('AdminEmails', 'trustee@example.com');
+    setMockEmail('');
+    expect(setupSheets()).toEqual({ ok: false, error: 'NOT_AUTHORIZED' });
+  });
+
+  it('returns NOT_CONFIGURED when SpreadsheetId is unset', () => {
+    setMockProperty('AdminEmails', 'trustee@example.com');
+    setMockEmail('trustee@example.com');
+    expect(setupSheets()).toEqual({ ok: false, error: 'NOT_CONFIGURED' });
+  });
+
+  it('handles AdminEmails with surrounding whitespace and mixed case', () => {
+    setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+    setMockProperty('AdminEmails', ' Trustee@Example.COM , other@x.com ');
+    setMockEmail('trustee@example.com');
+    expect(setupSheets().ok).toBe(true);
+  });
+
+  it('calls Logger.log with confirmation including created list (no email in log)', () => {
+    setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+    setMockProperty('AdminEmails', 'trustee@example.com');
+    setMockEmail('trustee@example.com');
+    setupSheets();
+    const log = getLogCalls();
+    expect(log.length).toBeGreaterThan(0);
+    const msg = String(log[log.length - 1][0]);
+    expect(msg).toContain('setupSheets');
+    expect(msg).toContain('Sessions');
+    expect(msg).toContain('Checkins');
+    // Email must NOT appear in the log (PII concern); execution history records caller separately.
+    expect(msg).not.toContain('trustee@example.com');
+  });
+
+  it('returns BUSY_TRY_AGAIN on lock contention', () => {
+    setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+    setMockProperty('AdminEmails', 'trustee@example.com');
+    setMockEmail('trustee@example.com');
+    setLockAvailable(false);
+    expect(setupSheets()).toEqual({ ok: false, error: 'BUSY_TRY_AGAIN' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// startSession
+// ---------------------------------------------------------------------------
+
+describe('startSession', () => {
+  const goodInput = {
+    requestId: 'req-1',
+    date: '2026-05-12',
+    time: '19:00',
+    netType: 'Sunday Practice',
+    ncoCallsign: 'W7ABC',
+    repeater: 'W7DTC 146.86',
+    purposeNotes: '',
+  };
+
+  it('writes a Sessions row with all required fields, returns a UUID', () => {
+    bootstrap();
+    setMockUuids(['session-uuid-1']);
+    setMockNowIso('2026-05-12T19:00:00.000Z');
+    setMockEmail('w7abc@example.com');
+    const r = startSession(goodInput);
+    expect(r).toEqual({ ok: true, sessionId: 'session-uuid-1', deduped: false });
+    const sessions = getMockSheet('Sessions')!;
+    const row = sessions[1];
+    expect(row[SessionsCol.SessionID]).toBe('session-uuid-1');
+    expect(row[SessionsCol.StartTimestamp]).toBe('2026-05-12T19:00:00.000Z');
+    expect(row[SessionsCol.NetDate]).toBe('2026-05-12');
+    expect(row[SessionsCol.NetTime]).toBe('19:00');
+    expect(row[SessionsCol.NetType]).toBe('Sunday Practice');
+    expect(row[SessionsCol.NCOCallsign]).toBe('W7ABC');
+    expect(row[SessionsCol.NCOEmail]).toBe('w7abc@example.com');
+    expect(row[SessionsCol.Status]).toBe('Open');
+    expect(row[SessionsCol.RequestId]).toBe('req-1');
+  });
+
+  it('re-call with the same requestId is deduped and writes no new row', () => {
+    bootstrap();
+    setMockUuids(['session-uuid-1', 'session-uuid-2']);
+    startSession(goodInput);
+    const sessionsAfterFirst = getMockSheet('Sessions')!.length;
+    const r = startSession(goodInput);
+    expect(r).toEqual({ ok: true, sessionId: 'session-uuid-1', deduped: true });
+    expect(getMockSheet('Sessions')!.length).toBe(sessionsAfterFirst);
+  });
+
+  it('rejects missing ncoCallsign', () => {
+    bootstrap();
+    const r = startSession({ ...goodInput, ncoCallsign: '' });
+    expect(r).toMatchObject({ ok: false, error: 'INVALID_INPUT', field: 'ncoCallsign' });
+  });
+
+  it('rejects invalid date', () => {
+    bootstrap();
+    const r = startSession({ ...goodInput, date: 'today' });
+    expect(r).toMatchObject({ ok: false, error: 'INVALID_INPUT', field: 'date' });
+  });
+
+  it('rejects invalid time', () => {
+    bootstrap();
+    const r = startSession({ ...goodInput, time: '7:00 PM' });
+    expect(r).toMatchObject({ ok: false, error: 'INVALID_INPUT', field: 'time' });
+  });
+
+  it('rejects empty requestId', () => {
+    bootstrap();
+    const r = startSession({ ...goodInput, requestId: '' });
+    expect(r).toMatchObject({ ok: false, error: 'INVALID_INPUT', field: 'requestId' });
+  });
+
+  it('rejects requestId longer than 64 chars', () => {
+    bootstrap();
+    const r = startSession({ ...goodInput, requestId: 'a'.repeat(65) });
+    expect(r).toMatchObject({ ok: false, error: 'INVALID_INPUT', field: 'requestId' });
+  });
+
+  it('clamps netType > 100 chars', () => {
+    bootstrap();
+    setMockUuids(['session-uuid-1']);
+    const long = 'x'.repeat(200);
+    const r = startSession({ ...goodInput, netType: long });
+    expect(r.ok).toBe(true);
+    const row = getMockSheet('Sessions')![1];
+    expect((row[SessionsCol.NetType] as string).length).toBe(100);
+  });
+
+  it('returns NOT_CONFIGURED when SpreadsheetId is unset', () => {
+    expect(startSession(goodInput)).toEqual({ ok: false, error: 'NOT_CONFIGURED' });
+  });
+
+  it('returns NOT_CONFIGURED when Sessions tab is missing', () => {
+    setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+    // Don't run setupSheets — tabs absent.
+    expect(startSession(goodInput)).toEqual({ ok: false, error: 'NOT_CONFIGURED' });
+  });
+
+  it('returns BUSY_TRY_AGAIN on lock contention', () => {
+    bootstrap();
+    setLockAvailable(false);
+    expect(startSession(goodInput)).toEqual({ ok: false, error: 'BUSY_TRY_AGAIN' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// recordCheckin
+// ---------------------------------------------------------------------------
+
+describe('recordCheckin', () => {
+  function startGoodSession(): string {
+    bootstrap();
+    setMockUuids(['session-uuid', 'checkin-uuid-1', 'checkin-uuid-2', 'checkin-uuid-3']);
+    setMockNowIso('2026-05-12T19:00:00.000Z');
+    const r = startSession({
+      requestId: 'req-1',
+      date: '2026-05-12',
+      time: '19:00',
+      netType: 'Sunday Practice',
+      ncoCallsign: 'W7ABC',
+    });
+    if (!r.ok) throw new Error('Expected session start to succeed');
+    return r.sessionId;
+  }
+
+  it('first event: creates a Checkins row, tapCount=1, firstEvent=true', () => {
+    const sessionId = startGoodSession();
+    setMockEmail('w7abc@example.com');
+    const r = recordCheckin({ sessionId, callsign: 'K7XYZ', eventId: 'evt-1' });
+    expect(r).toMatchObject({
+      ok: true,
+      firstEventForCallsignInSession: true,
+      tapCount: 1,
+      deduped: false,
+    });
+    const row = getMockSheet('Checkins')![1];
+    expect(row[CheckinsCol.Callsign]).toBe('K7XYZ');
+    expect(row[CheckinsCol.TapCount]).toBe(1);
+    expect(row[CheckinsCol.Source]).toBe('Manual');
+    expect(row[CheckinsCol.LastTappedEventId]).toBe('evt-1');
+    expect(row[CheckinsCol.LoggedByNCOEmail]).toBe('w7abc@example.com');
+    expect(row[CheckinsCol.LastTappedByNCOEmail]).toBe('w7abc@example.com');
+  });
+
+  it('re-tap with different eventId: increments tapCount, updates timestamps', () => {
+    const sessionId = startGoodSession();
+    recordCheckin({ sessionId, callsign: 'K7XYZ', eventId: 'evt-1' });
+    setMockNowIso('2026-05-12T19:05:00.000Z');
+    const r = recordCheckin({ sessionId, callsign: 'K7XYZ', eventId: 'evt-2' });
+    expect(r).toMatchObject({
+      ok: true,
+      firstEventForCallsignInSession: false,
+      tapCount: 2,
+      deduped: false,
+    });
+    const row = getMockSheet('Checkins')![1];
+    expect(row[CheckinsCol.TapCount]).toBe(2);
+    expect(row[CheckinsCol.FirstTimestamp]).toBe('2026-05-12T19:00:00.000Z'); // unchanged
+    expect(row[CheckinsCol.LatestTimestamp]).toBe('2026-05-12T19:05:00.000Z');
+    expect(row[CheckinsCol.LastTappedEventId]).toBe('evt-2');
+  });
+
+  it('retry with same eventId: deduped, no row change', () => {
+    const sessionId = startGoodSession();
+    recordCheckin({ sessionId, callsign: 'K7XYZ', eventId: 'evt-1' });
+    const rowsBefore = getMockSheet('Checkins')!.length;
+    const r = recordCheckin({ sessionId, callsign: 'K7XYZ', eventId: 'evt-1' });
+    expect(r).toMatchObject({ ok: true, deduped: true, tapCount: 1 });
+    expect(getMockSheet('Checkins')!.length).toBe(rowsBefore);
+  });
+
+  it('returns SESSION_NOT_FOUND for unknown sessionId', () => {
+    bootstrap();
+    const r = recordCheckin({ sessionId: 'nope', callsign: 'K7XYZ', eventId: 'evt-1' });
+    expect(r).toEqual({ ok: false, error: 'SESSION_NOT_FOUND' });
+  });
+
+  it('returns SESSION_CLOSED on a closed session', () => {
+    const sessionId = startGoodSession();
+    endSession({ sessionId });
+    const r = recordCheckin({ sessionId, callsign: 'K7XYZ', eventId: 'evt-1' });
+    expect(r).toEqual({ ok: false, error: 'SESSION_CLOSED' });
+  });
+
+  it('returns INVALID_CALLSIGN for bad callsign', () => {
+    bootstrap();
+    const r = recordCheckin({ sessionId: 'whatever', callsign: 'lower', eventId: 'evt-1' });
+    expect(r).toEqual({ ok: false, error: 'INVALID_CALLSIGN' });
+  });
+
+  it('returns INVALID_INPUT for empty eventId', () => {
+    bootstrap();
+    const r = recordCheckin({ sessionId: 'whatever', callsign: 'K7XYZ', eventId: '' });
+    expect(r).toMatchObject({ ok: false, error: 'INVALID_INPUT', field: 'eventId' });
+  });
+
+  it('returns NOT_CONFIGURED when SpreadsheetId is unset', () => {
+    const r = recordCheckin({ sessionId: 'x', callsign: 'K7XYZ', eventId: 'evt-1' });
+    expect(r).toEqual({ ok: false, error: 'NOT_CONFIGURED' });
+  });
+
+  it('returns BUSY_TRY_AGAIN on lock contention', () => {
+    bootstrap();
+    setLockAvailable(false);
+    const r = recordCheckin({ sessionId: 'x', callsign: 'K7XYZ', eventId: 'evt-1' });
+    expect(r).toEqual({ ok: false, error: 'BUSY_TRY_AGAIN' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// endSession
+// ---------------------------------------------------------------------------
+
+describe('endSession', () => {
+  function startGoodSession(): string {
+    bootstrap();
+    setMockUuids(['session-uuid', 'c1', 'c2', 'c3']);
+    setMockNowIso('2026-05-12T19:00:00.000Z');
+    const r = startSession({
+      requestId: 'req-1',
+      date: '2026-05-12',
+      time: '19:00',
+      netType: 'Sunday Practice',
+      ncoCallsign: 'W7ABC',
+    });
+    if (!r.ok) throw new Error();
+    return r.sessionId;
+  }
+
+  it('flips Status to Closed, writes EndTimestamp, returns counts and hours', () => {
+    const sessionId = startGoodSession();
+    recordCheckin({ sessionId, callsign: 'K7XYZ', eventId: 'e1' });
+    recordCheckin({ sessionId, callsign: 'W7DEF', eventId: 'e2' });
+    recordCheckin({ sessionId, callsign: 'W7DEF', eventId: 'e3' }); // re-tap
+    setMockNowIso('2026-05-12T19:30:00.000Z');
+    const r = endSession({ sessionId });
+    expect(r).toEqual({
+      ok: true,
+      checkinCount: 3, // 1 + 2
+      uniqueCallsignCount: 2,
+      hoursTotal: 1.0, // 2 * 0.5
+      spreadsheetUrl: MOCK_SPREADSHEET_URL,
+      alreadyClosed: false,
+    });
+    const sessionRow = getMockSheet('Sessions')![1];
+    expect(sessionRow[SessionsCol.Status]).toBe('Closed');
+    expect(sessionRow[SessionsCol.EndTimestamp]).toBe('2026-05-12T19:30:00.000Z');
+  });
+
+  it('zero check-ins: counts 0, hours 0, status Closed', () => {
+    const sessionId = startGoodSession();
+    const r = endSession({ sessionId });
+    expect(r).toMatchObject({
+      ok: true,
+      checkinCount: 0,
+      uniqueCallsignCount: 0,
+      hoursTotal: 0,
+      alreadyClosed: false,
+    });
+  });
+
+  it('re-call on already-closed session: alreadyClosed=true, preserves EndTimestamp', () => {
+    const sessionId = startGoodSession();
+    setMockNowIso('2026-05-12T19:30:00.000Z');
+    endSession({ sessionId });
+    const firstEndTs = (getMockSheet('Sessions')![1] as unknown[])[SessionsCol.EndTimestamp];
+    setMockNowIso('2026-05-12T20:00:00.000Z');
+    const r = endSession({ sessionId });
+    expect(r).toMatchObject({ ok: true, alreadyClosed: true });
+    // EndTimestamp NOT overwritten.
+    expect((getMockSheet('Sessions')![1] as unknown[])[SessionsCol.EndTimestamp]).toBe(firstEndTs);
+  });
+
+  it('returns SESSION_NOT_FOUND for unknown sessionId', () => {
+    bootstrap();
+    expect(endSession({ sessionId: 'nope' })).toEqual({ ok: false, error: 'SESSION_NOT_FOUND' });
+  });
+
+  it('returns INVALID_INPUT for empty sessionId', () => {
+    bootstrap();
+    expect(endSession({ sessionId: '' })).toMatchObject({
+      ok: false,
+      error: 'INVALID_INPUT',
+      field: 'sessionId',
+    });
+  });
+
+  it('returns NOT_CONFIGURED when SpreadsheetId is unset', () => {
+    expect(endSession({ sessionId: 'x' })).toEqual({ ok: false, error: 'NOT_CONFIGURED' });
+  });
+
+  it('returns BUSY_TRY_AGAIN on lock contention', () => {
+    bootstrap();
+    setLockAvailable(false);
+    expect(endSession({ sessionId: 'x' })).toEqual({ ok: false, error: 'BUSY_TRY_AGAIN' });
+  });
+});

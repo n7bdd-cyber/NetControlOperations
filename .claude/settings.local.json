@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:www.getopenclaw.ai)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git -C \"C:\\\\Users\\\\bsdar\\\\OneDrive\\\\Documents\\\\Git\\\\NetControlOperations\" ls-files)"
     ]
   }
 }
