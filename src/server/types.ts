@@ -47,6 +47,8 @@ export const CHECKINS_HEADERS = [
   'LastTappedEventId',
 ] as const;
 
+export const ROSTER_HEADERS = ['Callsign', 'Name', 'LastActive'] as const;
+
 export const SessionsCol = {
   SessionID: 0,
   StartTimestamp: 1,
@@ -75,8 +77,15 @@ export const CheckinsCol = {
   LastTappedEventId: 9,
 } as const;
 
+export const RosterCol = {
+  Callsign: 0,
+  Name: 1,
+  LastActive: 2,
+} as const;
+
 export const SHEET_SESSIONS = 'Sessions';
 export const SHEET_CHECKINS = 'Checkins';
+export const SHEET_ROSTER = 'Roster';
 
 export const SESSION_STATUS_OPEN = 'Open';
 export const SESSION_STATUS_CLOSED = 'Closed';
@@ -167,8 +176,40 @@ export type EndSessionResult =
   | { ok: false; error: 'BUSY_TRY_AGAIN' }
   | { ok: false; error: 'NOT_CONFIGURED' };
 
+// Literal union, not `string[]`, so a typo in a `created.push('Rooster')` call
+// fails at compile time. Tab semantics:
+//   'Sessions' / 'Checkins' — Slice 1 spine.
+//   'Roster'   — Slice 2 tab populated by Sunday-Sync (Slice 3) from the
+//                ActivARES member CSV. Lookup target for Suffix-Tap.
+//   'Others'   — future tab for non-member callsigns the NCO logs during a
+//                net (visitors, drop-ins, unresolved callsigns). Not created
+//                by Slice 2's setupSheets yet; the literal is in the union
+//                ahead of the slice that wires it up, so the type stays
+//                stable when that slice lands.
 export type SetupSheetsResult =
-  | { ok: true; created: ('Sessions' | 'Checkins')[] }
+  | { ok: true; created: ('Sessions' | 'Checkins' | 'Roster' | 'Others')[] }
   | { ok: false; error: 'NOT_CONFIGURED' }
   | { ok: false; error: 'NOT_AUTHORIZED' }
   | { ok: false; error: 'BUSY_TRY_AGAIN' };
+
+// Slice 2 — Suffix-Tap (FR-2 + FR-3, text-input subset).
+
+export interface RosterEntry {
+  callsign: string;
+  // `name` may be the empty string when the Roster row's Name column is blank.
+  name: string;
+  // `lastActive` is whatever string is in the Roster row's LastActive column,
+  // coerced from cell value. Slice 2 does not validate the shape; Sunday-Sync
+  // (Slice 3) will write well-formed ISO dates here.
+  lastActive: string;
+}
+
+export type GetRosterSnapshotResult =
+  | { ok: true; roster: RosterEntry[] }
+  // Spreadsheet not configured OR Roster tab missing.
+  | { ok: false; error: 'NOT_CONFIGURED' }
+  // getDataRange().getValues() threw — typically a transient Apps Script /
+  // Sheets API error or a quota exhaustion. The client treats this the same
+  // as NOT_CONFIGURED ("no usable roster"); the two are kept distinct on the
+  // server so cloud logs attribute cause.
+  | { ok: false; error: 'READ_FAILED' };

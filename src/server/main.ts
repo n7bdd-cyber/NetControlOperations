@@ -24,17 +24,22 @@ import {
   MAX_REPEATER,
   PROP_ADMIN_EMAILS,
   PROP_SPREADSHEET_ID,
+  ROSTER_HEADERS,
+  RosterCol,
   SESSIONS_HEADERS,
   SessionsCol,
   SESSION_STATUS_CLOSED,
   SESSION_STATUS_OPEN,
   SHEET_CHECKINS,
+  SHEET_ROSTER,
   SHEET_SESSIONS,
   SOURCE_MANUAL,
   type EndSessionInput,
   type EndSessionResult,
+  type GetRosterSnapshotResult,
   type RecordCheckinInput,
   type RecordCheckinResult,
+  type RosterEntry,
   type SetupSheetsResult,
   type StartSessionInput,
   type StartSessionResult,
@@ -325,7 +330,7 @@ export function endSession(input: EndSessionInput): EndSessionResult {
 }
 
 // ---------------------------------------------------------------------------
-// setupSheets — admin bootstrap. Creates Sessions and Checkins tabs.
+// setupSheets — admin bootstrap. Creates Sessions, Checkins, and Roster tabs.
 // Gated by the AdminEmails Script Property.
 // ---------------------------------------------------------------------------
 
@@ -346,11 +351,13 @@ export function setupSheets(): SetupSheetsResult {
     const ss = getSpreadsheetOrNull();
     if (!ss) return { ok: false, error: 'NOT_CONFIGURED' as const };
 
-    const created: ('Sessions' | 'Checkins')[] = [];
+    const created: ('Sessions' | 'Checkins' | 'Roster' | 'Others')[] = [];
     const sessions = getOrCreateSheetWithHeader(ss, SHEET_SESSIONS, SESSIONS_HEADERS);
     if (sessions.created) created.push('Sessions');
     const checkins = getOrCreateSheetWithHeader(ss, SHEET_CHECKINS, CHECKINS_HEADERS);
     if (checkins.created) created.push('Checkins');
+    const roster = getOrCreateSheetWithHeader(ss, SHEET_ROSTER, ROSTER_HEADERS);
+    if (roster.created) created.push('Roster');
 
     // Log the action, but NOT the admin email — execution history already records the caller.
     Logger.log(`setupSheets: created=${JSON.stringify(created)}`);
@@ -358,4 +365,61 @@ export function setupSheets(): SetupSheetsResult {
   });
 
   return result === 'BUSY' ? { ok: false, error: 'BUSY_TRY_AGAIN' } : result;
+}
+
+// ---------------------------------------------------------------------------
+// getRosterSnapshot — FR-2 (narrower signature than the PRD spec: no
+// asOfTimestamp, no RosterVersion; widening planned when IndexedDB lands).
+//
+// Read-only; no LockService (project convention: locks for writes only).
+// No in-app admin gate — any signed-in Google account that can reach the
+// web app can call this. Callsigns + names are FCC-public per PRD §161.
+// ---------------------------------------------------------------------------
+
+export function getRosterSnapshot(): GetRosterSnapshotResult {
+  const ss = getSpreadsheetOrNull();
+  if (!ss) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  // `getSheetByName` is usually total but can throw under transient
+  // Sheets-API failures; we want that to surface as READ_FAILED for log
+  // attribution rather than as an uncaught exception.
+  let sheet: GoogleAppsScript.Spreadsheet.Sheet | null;
+  try {
+    sheet = getSheetOrNull(ss, SHEET_ROSTER);
+  } catch (e) {
+    Logger.log(`getRosterSnapshot: getSheetByName threw: ${String(e)}`);
+    return { ok: false, error: 'READ_FAILED' };
+  }
+  if (!sheet) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  let values: unknown[][];
+  try {
+    values = sheet.getDataRange().getValues();
+  } catch (e) {
+    Logger.log(`getRosterSnapshot: getValues threw: ${String(e)}`);
+    return { ok: false, error: 'READ_FAILED' };
+  }
+
+  // Iterate data rows (skip header at index 0). Dedup by callsign: last-write-
+  // wins on row order, so a Sunday-Sync (Slice 3) re-write can rely on this.
+  const seen = new Map<string, RosterEntry>();
+  for (let i = 1; i < values.length; i++) {
+    // Per-row try/catch so one bad row doesn't sink the whole snapshot.
+    try {
+      const row = values[i];
+      const callsign = String(row[RosterCol.Callsign] ?? '').trim();
+      if (!callsign) continue; // silent skip for trailing blank rows
+      if (!isValidCallsign(callsign)) {
+        Logger.log(`getRosterSnapshot: skipping malformed row ${i}: ${callsign}`);
+        continue;
+      }
+      const name = String(row[RosterCol.Name] ?? '').trim();
+      const lastActive = String(row[RosterCol.LastActive] ?? '').trim();
+      seen.set(callsign, { callsign, name, lastActive });
+    } catch (e) {
+      Logger.log(`getRosterSnapshot: row ${i} threw: ${String(e)}`);
+    }
+  }
+
+  return { ok: true, roster: Array.from(seen.values()) };
 }

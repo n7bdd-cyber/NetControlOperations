@@ -24,6 +24,7 @@ import {
   recordCheckin,
   endSession,
   setupSheets,
+  getRosterSnapshot,
 } from '../src/server/main';
 import {
   setMockProperty,
@@ -31,13 +32,20 @@ import {
   setMockNowIso,
   setMockEmail,
   setLockAvailable,
+  setMockSheetThrowsOnRead,
   getMockSheet,
   getLogCalls,
   MOCK_SPREADSHEET_ID,
   MOCK_SPREADSHEET_URL,
 } from './setup';
 // (resetMocks is registered globally inside setup.ts; no per-file registration needed.)
-import { CHECKINS_HEADERS, SESSIONS_HEADERS, CheckinsCol, SessionsCol } from '../src/server/types';
+import {
+  CHECKINS_HEADERS,
+  ROSTER_HEADERS,
+  SESSIONS_HEADERS,
+  CheckinsCol,
+  SessionsCol,
+} from '../src/server/types';
 
 // Convenience: create the Sessions and Checkins tabs so server functions
 // don't return NOT_CONFIGURED. Mimics what setupSheets does on first run.
@@ -80,14 +88,15 @@ describe('doGet', () => {
 // ---------------------------------------------------------------------------
 
 describe('setupSheets', () => {
-  it('creates Sessions and Checkins tabs on first run', () => {
+  it('creates Sessions, Checkins, AND Roster tabs on first run', () => {
     setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
     setMockProperty('AdminEmails', 'trustee@example.com');
     setMockEmail('trustee@example.com');
     const r = setupSheets();
-    expect(r).toEqual({ ok: true, created: ['Sessions', 'Checkins'] });
+    expect(r).toEqual({ ok: true, created: ['Sessions', 'Checkins', 'Roster'] });
     expect(getMockSheet('Sessions')?.[0]).toEqual(SESSIONS_HEADERS);
     expect(getMockSheet('Checkins')?.[0]).toEqual(CHECKINS_HEADERS);
+    expect(getMockSheet('Roster')?.[0]).toEqual(ROSTER_HEADERS);
   });
 
   it('is idempotent: re-running returns created: [] and preserves data rows', () => {
@@ -500,4 +509,119 @@ describe('endSession', () => {
     setLockAvailable(false);
     expect(endSession({ sessionId: 'x' })).toEqual({ ok: false, error: 'BUSY_TRY_AGAIN' });
   });
+});
+
+// ---------------------------------------------------------------------------
+// getRosterSnapshot — FR-2 (Slice 2 narrower signature: no asOfTimestamp,
+// no RosterVersion). Read-only, no LockService, no admin gate.
+// ---------------------------------------------------------------------------
+
+describe('getRosterSnapshot', () => {
+  it('returns NOT_CONFIGURED when SpreadsheetId is unset', () => {
+    expect(getRosterSnapshot()).toEqual({ ok: false, error: 'NOT_CONFIGURED' });
+  });
+
+  it('returns NOT_CONFIGURED when the Roster tab is missing', () => {
+    setMockProperty('SpreadsheetId', MOCK_SPREADSHEET_ID);
+    // No bootstrap → Roster sheet does not exist on the mock spreadsheet.
+    expect(getRosterSnapshot()).toEqual({ ok: false, error: 'NOT_CONFIGURED' });
+  });
+
+  it('returns READ_FAILED when getDataRange().getValues() throws', () => {
+    bootstrap();
+    setMockSheetThrowsOnRead('Roster');
+    expect(getRosterSnapshot()).toEqual({ ok: false, error: 'READ_FAILED' });
+  });
+
+  it('returns an empty roster array when the Roster tab has only the header row', () => {
+    bootstrap();
+    const r = getRosterSnapshot();
+    expect(r).toEqual({ ok: true, roster: [] });
+  });
+
+  it('returns one RosterEntry per data row with Callsign, Name, LastActive fields populated', () => {
+    bootstrap();
+    const roster = getMockSheet('Roster')!;
+    roster.push(['W7ABC', 'Smith, Jane', '2026-05-01']);
+    roster.push(['KE7XYZ', 'Darby, Brian', '']);
+    const r = getRosterSnapshot();
+    expect(r).toEqual({
+      ok: true,
+      roster: [
+        { callsign: 'W7ABC', name: 'Smith, Jane', lastActive: '2026-05-01' },
+        { callsign: 'KE7XYZ', name: 'Darby, Brian', lastActive: '' },
+      ],
+    });
+  });
+
+  it('skips data rows with empty Callsign', () => {
+    bootstrap();
+    const roster = getMockSheet('Roster')!;
+    roster.push(['W7ABC', '', '']);
+    roster.push(['', '', '']); // trailing-blank row shape
+    roster.push(['  ', 'whatever', '']); // whitespace-only after trim
+    const r = getRosterSnapshot();
+    if (!r.ok) throw new Error('expected ok=true');
+    expect(r.roster.map((e) => e.callsign)).toEqual(['W7ABC']);
+  });
+
+  it.each([
+    ['lowercase', 'k7abc'],
+    ['special chars', 'K7!BC'],
+    ['suffix-only', 'ABC'],
+  ])('skips data rows with malformed Callsign: %s (%s)', (_label, cs) => {
+    bootstrap();
+    const roster = getMockSheet('Roster')!;
+    roster.push([cs, '', '']);
+    const r = getRosterSnapshot();
+    if (!r.ok) throw new Error('expected ok=true');
+    expect(r.roster).toEqual([]);
+  });
+
+  it('dedups duplicate callsigns: later row wins', () => {
+    bootstrap();
+    const roster = getMockSheet('Roster')!;
+    roster.push(['W7ABC', 'OldName', '2026-01-01']);
+    roster.push(['W7ABC', 'NewName', '2026-05-01']);
+    const r = getRosterSnapshot();
+    if (!r.ok) throw new Error('expected ok=true');
+    expect(r.roster).toHaveLength(1);
+    expect(r.roster[0]).toEqual({
+      callsign: 'W7ABC',
+      name: 'NewName',
+      lastActive: '2026-05-01',
+    });
+  });
+
+  it('preserves declaration order of valid, non-duplicate rows', () => {
+    bootstrap();
+    const roster = getMockSheet('Roster')!;
+    roster.push(['W7ABC', '', '']);
+    roster.push(['KE7XYZ', '', '']);
+    roster.push(['K7TST', '', '']);
+    roster.push(['N7DEF', '', '']);
+    const r = getRosterSnapshot();
+    if (!r.ok) throw new Error('expected ok=true');
+    expect(r.roster.map((e) => e.callsign)).toEqual([
+      'W7ABC',
+      'KE7XYZ',
+      'K7TST',
+      'N7DEF',
+    ]);
+  });
+
+  it('coerces numeric or Date cells to strings without crashing', () => {
+    bootstrap();
+    const roster = getMockSheet('Roster')!;
+    // Simulate Sheet returning a Date object for LastActive (Google Sheets
+    // sometimes returns Date objects when a cell looks like a date).
+    roster.push(['W7ABC', 123, new Date('2026-05-01T00:00:00Z')]);
+    const r = getRosterSnapshot();
+    if (!r.ok) throw new Error('expected ok=true');
+    expect(r.roster).toHaveLength(1);
+    expect(r.roster[0].callsign).toBe('W7ABC');
+    expect(typeof r.roster[0].name).toBe('string');
+    expect(typeof r.roster[0].lastActive).toBe('string');
+  });
+
 });

@@ -24,6 +24,7 @@ interface MockState {
   email: string;
   lockAvailable: boolean;
   sheets: Map<string, unknown[][]>; // sheetName -> rows of cells (row 0 = header)
+  sheetReadThrows: Set<string>; // sheets whose getDataRange().getValues() should throw
   spreadsheetExists: boolean;
   logCalls: unknown[][];
 }
@@ -35,6 +36,7 @@ const state: MockState = {
   email: '',
   lockAvailable: true,
   sheets: new Map(),
+  sheetReadThrows: new Set(),
   spreadsheetExists: true,
   logCalls: [],
 };
@@ -71,6 +73,12 @@ export function setMockSpreadsheetExists(exists: boolean): void {
   state.spreadsheetExists = exists;
 }
 
+// Force `Sheet.getDataRange().getValues()` to throw for the named sheet.
+// Used to exercise READ_FAILED-style error paths in getRosterSnapshot etc.
+export function setMockSheetThrowsOnRead(name: string): void {
+  state.sheetReadThrows.add(name);
+}
+
 export function getMockSheet(name: string): unknown[][] | undefined {
   return state.sheets.get(name);
 }
@@ -86,6 +94,7 @@ export function resetMocks(): void {
   state.email = '';
   state.lockAvailable = true;
   state.sheets.clear();
+  state.sheetReadThrows.clear();
   state.spreadsheetExists = true;
   state.logCalls = [];
   jest.clearAllMocks();
@@ -166,7 +175,12 @@ function makeSheet(name: string, rows: unknown[][]) {
         },
       };
     },
-    getDataRange: (): MockRange => makeRange(rows, rows[0]?.length ?? 0),
+    getDataRange: (): MockRange => {
+      if (state.sheetReadThrows.has(name)) {
+        throw new Error(`Mock: getDataRange threw on '${name}'`);
+      }
+      return makeRange(rows, rows[0]?.length ?? 0);
+    },
   };
 }
 

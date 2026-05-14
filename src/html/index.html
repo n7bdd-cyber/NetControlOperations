@@ -90,6 +90,40 @@
         from { background: #fff5cc; }
         to { background: transparent; }
       }
+      /* Slice 2: Suffix-Tap candidate list */
+      .candidates-row {
+        margin: 12px 0;
+        padding: 12px;
+        background: #f4f6f8;
+        border-radius: 6px;
+      }
+      .candidates-list {
+        list-style: none;
+        padding: 0;
+        margin: 8px 0;
+      }
+      .candidates-list li { margin: 6px 0; }
+      .candidate {
+        display: block;
+        width: 100%;
+        min-height: 48px;
+        text-align: left;
+        font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+        font-size: 18px;
+        padding: 12px;
+      }
+      .candidate:focus { outline: 3px solid #0b69d3; outline-offset: 2px; }
+      .recent-badge {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 2px 8px;
+        font-size: 14px;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: #ffd966;
+        color: #111;
+        border-radius: 10px;
+        font-weight: 600;
+      }
       .toast {
         position: fixed;
         left: 50%;
@@ -150,6 +184,14 @@
           <button id="btn-log" type="button">LOG</button>
         </div>
         <p id="e-callsign" class="field-error" role="alert"></p>
+
+        <!-- Slice 2: Suffix-Tap candidate list. Hidden until onLog suffix-only
+             branch renders matches; dismissed via Escape or btn-candidates-cancel. -->
+        <div id="candidates-row" class="candidates-row" hidden>
+          <p id="candidates-prompt" aria-live="polite">Suffix matches:</p>
+          <ul id="candidates-list" class="candidates-list"></ul>
+          <button id="btn-candidates-cancel" class="secondary" type="button">Cancel — keep typing</button>
+        </div>
 
         <h2>Last check-ins</h2>
         <ul id="checkin-list" class="checkin-list" aria-live="polite"></ul>
@@ -225,6 +267,12 @@
       var SUFFIX_ONLY_RE = /^[A-Z]{1,3}$/;
       var DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
       var TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+      // Slice 2 — Suffix-Tap inline error messages.
+      var LOADING_ROSTER_MSG = 'Loading roster — try again in a moment.';
+      var ROSTER_UNAVAILABLE_MSG = 'Roster unavailable — type the full callsign (e.g. W7ABC).';
+      var ROSTER_EMPTY_MSG = 'Roster is empty — type the full callsign.';
+      var MAX_CANDIDATES = 10;
       function validCallsign(s) { return typeof s === 'string' && s.length <= 18 && CALLSIGN_RE.test(s); }
       function isLikelySuffixOnly(s) { return typeof s === 'string' && SUFFIX_ONLY_RE.test(s); }
       function validDate(s) { return typeof s === 'string' && DATE_RE.test(s); }
@@ -240,6 +288,9 @@
         history: [],          // ordered list of callsigns in event order (newest first)
         inFlightStart: null,  // { requestId, input }
         inFlightCheckin: null,// { eventId, callsign }
+        roster: [],           // RosterEntry[] populated by getRosterSnapshot after startSession
+        rosterLoaded: false,  // true once getRosterSnapshot has returned (even if it returned []) — disambiguates "still loading" from "loaded and empty"
+        rosterLoadError: false,
       };
 
       // -----------------------------------------------------------------
@@ -296,6 +347,235 @@
           li.appendChild(right);
           ul.appendChild(li);
         });
+      }
+
+      // -----------------------------------------------------------------
+      // Slice 2 — Suffix-Tap helpers.
+      //
+      // findCandidatesBySuffix: PRD FR-3 priority order (Slice 2 cut: bands
+      // 1 + 2 only). Returns up to MAX_CANDIDATES RosterEntry objects:
+      //   Band 1: recent-this-net — iterate NetControl.history (newest-first),
+      //           filter to callsigns still in NetControl.checkins, filter by
+      //           endsWith(suffix). Name is looked up from NetControl.roster
+      //           (if not in roster, name is empty).
+      //   Band 2: NetControl.roster entries that endsWith(suffix), excluding
+      //           any callsign already in band 1. Declaration order preserved.
+      //
+      // Caller-contract: `suffix` is 1-3 ALL-CAPS letters (caller already
+      // validated via SUFFIX_ONLY_RE). Defensive `if (!suffix) return [];`
+      // guards against a future regression in the caller.
+      // -----------------------------------------------------------------
+      function findCandidatesBySuffix(suffix) {
+        if (!suffix) return [];
+        var rosterByCallsign = new Map();
+        NetControl.roster.forEach(function (e) { rosterByCallsign.set(e.callsign, e); });
+
+        var band1 = [];
+        var band1Set = new Set();
+        for (var i = 0; i < NetControl.history.length; i++) {
+          var cs = NetControl.history[i];
+          if (!NetControl.checkins.has(cs)) continue;
+          if (!cs.endsWith(suffix)) continue;
+          if (band1Set.has(cs)) continue; // defensive against duplicates in history
+          var rosterRow = rosterByCallsign.get(cs);
+          band1.push({
+            callsign: cs,
+            name: rosterRow ? rosterRow.name : '',
+            lastActive: rosterRow ? rosterRow.lastActive : '',
+            recent: true,
+          });
+          band1Set.add(cs);
+          if (band1.length >= MAX_CANDIDATES) break;
+        }
+
+        var band2 = [];
+        for (var j = 0; j < NetControl.roster.length && band1.length + band2.length < MAX_CANDIDATES; j++) {
+          var r = NetControl.roster[j];
+          if (band1Set.has(r.callsign)) continue;
+          if (!r.callsign.endsWith(suffix)) continue;
+          band2.push({
+            callsign: r.callsign,
+            name: r.name,
+            lastActive: r.lastActive,
+            recent: false,
+          });
+        }
+
+        return band1.concat(band2);
+      }
+
+      // The stable function reference used by addEventListener / removeEventListener
+      // so the listener can actually be removed on dismiss (a fresh closure would
+      // not match for removal).
+      function onCandidatesKeydown(e) {
+        if (e.key !== 'Escape') return;
+        if ($('candidates-row').hidden) return; // no-op when list isn't up
+        e.preventDefault();
+        dismissCandidates();
+      }
+
+      function renderCandidates(candidates) {
+        var prompt = $('candidates-prompt');
+        prompt.textContent = 'Suffix matches: ' + candidates.length + ' found.';
+        var ul = $('candidates-list');
+        ul.textContent = '';
+        candidates.forEach(function (c) {
+          var li = document.createElement('li');
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'candidate';
+          btn.dataset.callsign = c.callsign;
+          // Build textContent: "W7ABC" if name empty, else "W7ABC — Name".
+          // No innerHTML — Sheet-controlled name is rendered as text only.
+          btn.textContent = c.name ? c.callsign + ' — ' + c.name : c.callsign;
+          if (c.recent) {
+            var chip = document.createElement('span');
+            chip.className = 'recent-badge';
+            chip.textContent = 'this net';
+            // Space before the chip so screen-reader announces them as separate words.
+            btn.appendChild(document.createTextNode(' '));
+            btn.appendChild(chip);
+          }
+          li.appendChild(btn);
+          ul.appendChild(li);
+        });
+        $('candidates-row').hidden = false;
+        $('btn-log').disabled = true;
+        // Idempotent listener attach: remove first so a future code path that
+        // calls renderCandidates twice (without an intervening dismiss) doesn't
+        // stack the listener.
+        document.removeEventListener('keydown', onCandidatesKeydown);
+        document.addEventListener('keydown', onCandidatesKeydown);
+        // Focus the first candidate so Enter commits the top one.
+        var first = ul.querySelector('button.candidate');
+        if (first) first.focus();
+      }
+
+      function dismissCandidates() {
+        $('candidates-row').hidden = true;
+        $('btn-log').disabled = false;
+        // Defensive re-enable of any candidate buttons that were disabled
+        // by an in-flight onCandidateTap.
+        var btns = document.querySelectorAll('#candidates-list .candidate');
+        btns.forEach(function (b) { b.disabled = false; });
+        // Re-enable the callsign input. onCandidateTap may have disabled it
+        // and is still awaiting recordCheckin; the cancel-token trip will
+        // also re-enable it later, but doing it here makes the user-perceived
+        // cancel latency zero rather than 50ms–2s.
+        $('f-callsign').disabled = false;
+        NetControl.inFlightCheckin = null;
+        document.removeEventListener('keydown', onCandidatesKeydown);
+        $('f-callsign').focus();
+      }
+
+      // Wipe per-session client state. Called when the server tells us the
+      // session is gone (SESSION_NOT_FOUND / SESSION_CLOSED) so the next
+      // startSession sees a clean slate rather than inheriting the prior
+      // session's checkins, history, and roster snapshot. Does NOT touch
+      // start-form values or inFlightStart — that's `onNewNet`'s job.
+      function resetSessionLocalState() {
+        NetControl.sessionId = null;
+        NetControl.checkins = new Map();
+        NetControl.history = [];
+        NetControl.inFlightCheckin = null;
+        NetControl.roster = [];
+        NetControl.rosterLoaded = false;
+        NetControl.rosterLoadError = false;
+        renderCounters();
+        renderList(null);
+      }
+
+      async function onCandidateTap(callsign) {
+        // Capture the eventId locally as a cancel token. If `dismissCandidates`
+        // fires while we're awaiting (Escape or Cancel button), the post-await
+        // side-effects MUST NOT run — otherwise a cancelled tap still mutates
+        // checkins + history + DOM and would stomp the user's input via
+        // `$('f-callsign').value = ''`. Server-side, the recordCheckin row may
+        // still have been written; that's inherent to in-flight network calls
+        // and out of scope here.
+        var localEventId = NetControl.inFlightCheckin && NetControl.inFlightCheckin.eventId;
+        if (!localEventId) return; // defensive — shouldn't happen via the wired flow
+
+        var btns = document.querySelectorAll('#candidates-list .candidate');
+        btns.forEach(function (b) { b.disabled = true; });
+        // Also disable the callsign input during the in-flight tap so user
+        // typing during the ~2 s BUSY-backoff window can't be wiped by the
+        // success path's input-clear.
+        $('f-callsign').disabled = true;
+        try {
+          var result = await callWithRetry('recordCheckin', {
+            sessionId: NetControl.sessionId,
+            callsign: callsign,
+            eventId: localEventId,
+          });
+          // Gate: was this tap cancelled while we were awaiting?
+          if (!NetControl.inFlightCheckin || NetControl.inFlightCheckin.eventId !== localEventId) {
+            // Ownership rule: the live owner of #f-callsign's disabled state
+            // is whichever flow currently holds NetControl.inFlightCheckin.
+            // Since the gate just told us we are NOT that owner, do NOT
+            // touch #f-callsign.disabled — a fresh onCandidateTap from a new
+            // candidate-list cycle may have intentionally disabled it, and
+            // re-enabling here would let the user type during the new tap's
+            // BUSY-backoff window and have that typing wiped on its success.
+            // The candidate buttons we captured are detached from DOM by the
+            // intervening renderCandidates / dismissCandidates, so re-enabling
+            // them is a defensive no-op.
+            btns.forEach(function (b) { b.disabled = false; });
+            return;
+          }
+          if (!result || !result.ok) {
+            if (result && (result.error === 'SESSION_NOT_FOUND' || result.error === 'SESSION_CLOSED')) {
+              toast(result.error === 'SESSION_CLOSED' ? 'Net already ended.' : 'Session expired — start a new net.');
+              // Tear down candidate-list state so the next session doesn't
+              // inherit a stale visible candidate list, a disabled LOG button,
+              // a leaked keydown listener, or a stale inFlightCheckin.
+              dismissCandidates();
+              // Clear per-session client state so the new session starts clean.
+              resetSessionLocalState();
+              $('f-callsign').disabled = false;
+              showScreen('screen-start');
+              return;
+            } else if (result && result.error === 'INVALID_CALLSIGN') {
+              setFieldError('e-callsign', 'Invalid callsign.');
+            } else if (result && result.error === 'BUSY_TRY_AGAIN') {
+              toast('Try again — system busy.');
+            } else {
+              toast('Could not log check-in.');
+            }
+            // Re-enable candidate buttons + input so user can pick again.
+            btns.forEach(function (b) { b.disabled = false; });
+            $('f-callsign').disabled = false;
+            return;
+          }
+          // Mirror onLog's success-path bookkeeping.
+          var existing = NetControl.checkins.get(callsign);
+          var entry = existing || { checkinId: result.checkinId, firstTimestamp: '', latestTimestamp: '', tapCount: 0 };
+          entry.tapCount = result.tapCount;
+          NetControl.checkins.set(callsign, entry);
+          NetControl.history = [callsign].concat(NetControl.history.filter(function (c) { return c !== callsign; }));
+          NetControl.inFlightCheckin = null;
+          renderCounters();
+          renderList(result.deduped ? null : callsign);
+          // Hide the candidate list, clear the input, restore focus.
+          $('candidates-row').hidden = true;
+          $('btn-log').disabled = false;
+          $('f-callsign').disabled = false;
+          document.removeEventListener('keydown', onCandidatesKeydown);
+          $('f-callsign').value = '';
+          $('f-callsign').focus();
+        } catch (e) {
+          // Gate: same cancel-token check on the error path. Ownership rule
+          // applies — see the success-path gate's comment for the full
+          // rationale; do NOT re-enable #f-callsign.disabled when we are not
+          // the current owner of inFlightCheckin.
+          if (!NetControl.inFlightCheckin || NetControl.inFlightCheckin.eventId !== localEventId) {
+            btns.forEach(function (b) { b.disabled = false; });
+            return;
+          }
+          toast('Network error — try again.');
+          btns.forEach(function (b) { b.disabled = false; });
+          $('f-callsign').disabled = false;
+        }
       }
 
       // -----------------------------------------------------------------
@@ -403,6 +683,28 @@
           renderList(null);
           showScreen('screen-log');
           setTimeout(function () { $('f-callsign').focus(); }, 0);
+
+          // Fire-and-forget roster fetch. We don't await — Logging screen
+          // appears immediately. Capture sessionId in a closure so a late-
+          // resolving snapshot doesn't pollute a subsequent session's state.
+          var fetchSessionId = NetControl.sessionId;
+          callWithRetry('getRosterSnapshot', {}).then(function (snap) {
+            if (NetControl.sessionId !== fetchSessionId) return;
+            if (snap && snap.ok) {
+              NetControl.roster = snap.roster;
+              NetControl.rosterLoaded = true;
+              // Late-resolution UX cue: if we're currently showing the
+              // "Loading roster" inline error, clear it now.
+              if ($('e-callsign').textContent === LOADING_ROSTER_MSG) {
+                setFieldError('e-callsign', '');
+              }
+            } else {
+              NetControl.rosterLoadError = true;
+            }
+          }).catch(function () {
+            if (NetControl.sessionId !== fetchSessionId) return;
+            NetControl.rosterLoadError = true;
+          });
         } catch (e) {
           toast('Network error — try again.');
         } finally {
@@ -418,10 +720,45 @@
         var raw = $('f-callsign').value.trim().toUpperCase();
         if (!validCallsign(raw)) {
           if (isLikelySuffixOnly(raw)) {
-            // Slice 1 has no roster, so we can't resolve suffixes. When
-            // Suffix-Tap (FR-3) lands, this branch becomes the entry into
-            // the candidate-list flow.
-            setFieldError('e-callsign', "Type the full callsign (e.g. W7ABC) — Suffix-Tap isn't built yet.");
+            // Mint the eventId now and stash in inFlightCheckin (callsign null
+            // until the NCO picks one); onCandidateTap reuses this eventId so
+            // a BUSY-retry doesn't double-log.
+            if (!NetControl.inFlightCheckin) {
+              NetControl.inFlightCheckin = { eventId: uuid4(), callsign: null };
+            }
+            if (NetControl.rosterLoadError) {
+              setFieldError('e-callsign', ROSTER_UNAVAILABLE_MSG);
+              NetControl.inFlightCheckin = null;
+              return;
+            }
+            if (!NetControl.rosterLoaded) {
+              // Snapshot hasn't returned yet. Distinct from loaded-but-empty.
+              setFieldError('e-callsign', LOADING_ROSTER_MSG);
+              NetControl.inFlightCheckin = null;
+              return;
+            }
+            // Run the candidate lookup BEFORE the empty-roster check —
+            // band 1 (recent-this-net) doesn't depend on the roster, so a
+            // callsign the NCO already logged via direct LOG should still
+            // surface as a candidate even when the Roster tab is empty.
+            var candidates = findCandidatesBySuffix(raw);
+            if (candidates.length > 0) {
+              renderCandidates(candidates);
+              return;
+            }
+            // Zero candidates: pick the most informative message based on
+            // why nothing matched.
+            if (NetControl.roster.length === 0) {
+              // Roster is empty AND no recent-this-net match either.
+              setFieldError('e-callsign', ROSTER_EMPTY_MSG);
+            } else {
+              setFieldError(
+                'e-callsign',
+                "No callsign in the roster ends with '" + raw + "'. Type the full callsign or check the suffix.",
+              );
+            }
+            NetControl.inFlightCheckin = null;
+            return;
           } else {
             setFieldError('e-callsign', 'Callsigns are letters, digits, and / only (e.g. W7ABC, K7XYZ/M).');
           }
@@ -440,9 +777,11 @@
           if (!result || !result.ok) {
             if (result && result.error === 'SESSION_NOT_FOUND') {
               toast('Session expired — start a new net.');
+              resetSessionLocalState();
               showScreen('screen-start');
             } else if (result && result.error === 'SESSION_CLOSED') {
               toast('Net already ended.');
+              resetSessionLocalState();
               showScreen('screen-start');
             } else if (result && result.error === 'INVALID_CALLSIGN') {
               setFieldError('e-callsign', 'Invalid callsign.');
@@ -507,6 +846,9 @@
           history: [],
           inFlightStart: null,
           inFlightCheckin: null,
+          roster: [],
+          rosterLoaded: false,
+          rosterLoadError: false,
         };
         ['f-net-type','f-nco','f-repeater','f-notes','f-callsign'].forEach(function (id) {
           var el = $(id); if (el) el.value = '';
@@ -524,12 +866,29 @@
         $('btn-start').addEventListener('click', onStart);
         $('btn-log').addEventListener('click', onLog);
         $('f-callsign').addEventListener('keydown', function (e) {
-          if (e.key === 'Enter') { e.preventDefault(); onLog(); }
+          if (e.key !== 'Enter') return;
+          // Always preventDefault first so a future refactor that wraps this
+          // input in a <form> doesn't let Enter trigger implicit form submit
+          // even when the candidate list is up.
+          e.preventDefault();
+          // Gate: Enter must not bypass the disabled LOG button when the
+          // candidate list is showing. Cancel/Escape are the only dismissals.
+          if (!$('candidates-row').hidden) return;
+          onLog();
         });
         $('btn-end').addEventListener('click', onEndTap);
         $('btn-end-cancel').addEventListener('click', onEndCancel);
         $('btn-end-confirm').addEventListener('click', onEndConfirm);
         $('btn-new-net').addEventListener('click', onNewNet);
+
+        // Slice 2 wiring: candidate-list click delegation + cancel button.
+        $('candidates-list').addEventListener('click', function (e) {
+          var btn = e.target.closest && e.target.closest('button.candidate');
+          if (!btn || btn.disabled) return;
+          var cs = btn.dataset.callsign;
+          if (cs) onCandidateTap(cs);
+        });
+        $('btn-candidates-cancel').addEventListener('click', dismissCandidates);
       });
     </script>
   </body>

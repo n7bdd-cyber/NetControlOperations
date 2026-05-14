@@ -20,3 +20,9 @@ coverage/
 # Environment / secret files (if we ever add any locally for testing).
 .env
 .env.local
+
+# Roster CSV exports. These contain member callsign + name PII; we do not
+# want a `git add -A` to accidentally commit them. Slice 2 populates the
+# Roster Sheet tab by hand; Slice 3's Sunday-Sync will read from a Drive CSV
+# (out-of-repo) and write to the Sheet, so the CSV should never live here.
+members-*.csv

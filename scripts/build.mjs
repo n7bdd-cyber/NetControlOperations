@@ -51,6 +51,7 @@ async function main() {
         'function recordCheckin() { return __app__.recordCheckin.apply(this, arguments); }',
         'function endSession() { return __app__.endSession.apply(this, arguments); }',
         'function setupSheets() { return __app__.setupSheets.apply(this, arguments); }',
+        'function getRosterSnapshot() { return __app__.getRosterSnapshot.apply(this, arguments); }',
       ].join('\n'),
     },
     target: 'es2020',
