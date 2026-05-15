@@ -54,6 +54,11 @@ export function getOrCreateSheetWithHeader(
 ): { sheet: GoogleAppsScript.Spreadsheet.Sheet; created: boolean } {
   const existing = ss.getSheetByName(name);
   if (existing) {
+    // If the sheet exists but has no header row, write one now.
+    if (existing.getLastRow() === 0) {
+      existing.getRange(1, 1, 1, headers.length).setValues([[...headers]]);
+      existing.setFrozenRows(1);
+    }
     return { sheet: existing, created: false };
   }
   const sheet = ss.insertSheet(name);

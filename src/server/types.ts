@@ -1,5 +1,5 @@
 /**
- * Shared types and constants for the Slice 1 server modules.
+ * Shared types and constants for the server modules.
  *
  * Teaching notes:
  *  - `export` makes a name visible to other files that `import` from this one.
@@ -9,12 +9,12 @@
  *    use it because they're not simple object shapes.
  *  - `as const` tells TypeScript "treat these literal values as the narrowest
  *    possible types, don't widen them to string/number." That's how the
- *    SessionsCol enum below keeps its exact index values instead of becoming
+ *    SessionsCol object below keeps its exact index values instead of becoming
  *    just `Record<string, number>`.
  */
 
 // ---------------------------------------------------------------------------
-// Sheet schema — header row literals + 0-based column-index enums.
+// Sheet schema — header row literals + 0-based column-index objects.
 // 0-based for use against `getValues()[row]` arrays. Sheet API itself is
 // 1-based, so add 1 when calling `getRange(rowIdx + 1, col + 1)`.
 // ---------------------------------------------------------------------------
@@ -34,6 +34,8 @@ export const SESSIONS_HEADERS = [
   'RequestId',
 ] as const;
 
+// Name appended at index 10 — safe because existing Slices 1-2 rows have
+// 10 columns (indices 0-9); the new column lands beyond them without shifting.
 export const CHECKINS_HEADERS = [
   'CheckinID',
   'SessionID',
@@ -45,9 +47,23 @@ export const CHECKINS_HEADERS = [
   'Source',
   'LastTappedByNCOEmail',
   'LastTappedEventId',
+  'Name',
 ] as const;
 
-export const ROSTER_HEADERS = ['Callsign', 'Name', 'LastActive'] as const;
+// LastActive removed (was a Slice 2 stub — ActivARES CSV has no per-entry
+// timestamps); LicenseClass replaces it, sourced from the Sunday-Sync CSV.
+export const ROSTER_HEADERS = ['Callsign', 'Name', 'LicenseClass'] as const;
+
+export const OTHERS_HEADERS = [
+  'Callsign',
+  'Name',
+  'FccName',
+  'Source',
+  'NameConflict',
+  'LastActive',
+] as const;
+
+export const SETTINGS_HEADERS = ['Key', 'Value'] as const;
 
 export const SessionsCol = {
   SessionID: 0,
@@ -75,17 +91,29 @@ export const CheckinsCol = {
   Source: 7,
   LastTappedByNCOEmail: 8,
   LastTappedEventId: 9,
+  Name: 10,
 } as const;
 
 export const RosterCol = {
   Callsign: 0,
   Name: 1,
-  LastActive: 2,
+  LicenseClass: 2,
+} as const;
+
+export const OthersCol = {
+  Callsign: 0,
+  Name: 1,
+  FccName: 2,
+  Source: 3,
+  NameConflict: 4,
+  LastActive: 5,
 } as const;
 
 export const SHEET_SESSIONS = 'Sessions';
 export const SHEET_CHECKINS = 'Checkins';
 export const SHEET_ROSTER = 'Roster';
+export const SHEET_OTHERS = 'Others';
+export const SHEET_SETTINGS = 'Settings';
 
 export const SESSION_STATUS_OPEN = 'Open';
 export const SESSION_STATUS_CLOSED = 'Closed';
@@ -98,6 +126,9 @@ export const SOURCE_MANUAL = 'Manual';
 
 export const PROP_SPREADSHEET_ID = 'SpreadsheetId';
 export const PROP_ADMIN_EMAILS = 'AdminEmails';
+export const PROP_CALLOOK_BASE_URL = 'CallookBaseUrl';
+export const PROP_TRUSTEE_EMAIL = 'TrusteeEmail';
+export const PROP_ROSTER_CSV_DRIVE_FOLDER_ID = 'RosterCsvDriveFolderId';
 
 // ---------------------------------------------------------------------------
 // Field length caps (validators clamp longer strings server-side).
@@ -115,7 +146,23 @@ export const MAX_PURPOSE_NOTES = 500;
 // on f-nco and f-callsign in src/html/index.html and with the client-side
 // length guard in `validCallsign` there.
 export const MAX_CALLSIGN = 18;
-export const MAX_ID_FIELD = 64; // requestId, eventId, sessionId
+export const MAX_ID_FIELD = 64; // requestId, eventId, sessionId, checkinId
+export const MAX_NAME = 64;     // setManualName — name the NCO heard on air
+
+// ---------------------------------------------------------------------------
+// Others tab types.
+// ---------------------------------------------------------------------------
+
+export type OthersSource = 'fcc' | 'manual' | 'pending';
+
+export interface OthersEntry {
+  callsign: string;
+  name: string;
+  fccName: string;
+  source: OthersSource;
+  nameConflict: boolean;
+  lastActive: string;
+}
 
 // ---------------------------------------------------------------------------
 // Server function input / output types.
@@ -150,6 +197,11 @@ export type RecordCheckinResult =
       firstEventForCallsignInSession: boolean;
       tapCount: number;
       deduped: boolean;
+      // resolveAsync: true  → client must call resolveName (FCC lookup pending).
+      // resolveAsync: false → name already resolved; resolvedName has the value
+      //   (may be null for roster members whose Name column is blank).
+      resolveAsync: boolean;
+      resolvedName: string | null;
     }
   | { ok: false; error: 'INVALID_INPUT'; field: string; reason: string }
   | { ok: false; error: 'INVALID_CALLSIGN' }
@@ -176,18 +228,13 @@ export type EndSessionResult =
   | { ok: false; error: 'BUSY_TRY_AGAIN' }
   | { ok: false; error: 'NOT_CONFIGURED' };
 
-// Literal union, not `string[]`, so a typo in a `created.push('Rooster')` call
-// fails at compile time. Tab semantics:
+// Tab literals ordered by creation. Tab semantics:
 //   'Sessions' / 'Checkins' — Slice 1 spine.
-//   'Roster'   — Slice 2 tab populated by Sunday-Sync (Slice 3) from the
-//                ActivARES member CSV. Lookup target for Suffix-Tap.
-//   'Others'   — future tab for non-member callsigns the NCO logs during a
-//                net (visitors, drop-ins, unresolved callsigns). Not created
-//                by Slice 2's setupSheets yet; the literal is in the union
-//                ahead of the slice that wires it up, so the type stays
-//                stable when that slice lands.
+//   'Roster'   — populated by Sunday-Sync from the ActivARES member CSV.
+//   'Others'   — non-member callsign cache (visitors, drop-ins, unresolved).
+//   'Settings' — key/value config placeholder; UI deferred to a later slice.
 export type SetupSheetsResult =
-  | { ok: true; created: ('Sessions' | 'Checkins' | 'Roster' | 'Others')[] }
+  | { ok: true; created: ('Sessions' | 'Checkins' | 'Roster' | 'Others' | 'Settings')[] }
   | { ok: false; error: 'NOT_CONFIGURED' }
   | { ok: false; error: 'NOT_AUTHORIZED' }
   | { ok: false; error: 'BUSY_TRY_AGAIN' };
@@ -198,10 +245,9 @@ export interface RosterEntry {
   callsign: string;
   // `name` may be the empty string when the Roster row's Name column is blank.
   name: string;
-  // `lastActive` is whatever string is in the Roster row's LastActive column,
-  // coerced from cell value. Slice 2 does not validate the shape; Sunday-Sync
-  // (Slice 3) will write well-formed ISO dates here.
-  lastActive: string;
+  // `licenseClass` is whatever string is in the Roster row's LicenseClass column,
+  // sourced from the ActivARES CSV on Sunday-Sync. e.g. 'General', 'Extra'.
+  licenseClass: string;
 }
 
 export type GetRosterSnapshotResult =
@@ -209,7 +255,23 @@ export type GetRosterSnapshotResult =
   // Spreadsheet not configured OR Roster tab missing.
   | { ok: false; error: 'NOT_CONFIGURED' }
   // getDataRange().getValues() threw — typically a transient Apps Script /
-  // Sheets API error or a quota exhaustion. The client treats this the same
-  // as NOT_CONFIGURED ("no usable roster"); the two are kept distinct on the
-  // server so cloud logs attribute cause.
+  // Sheets API error or a quota exhaustion.
   | { ok: false; error: 'READ_FAILED' };
+
+// Slice 3 — async FCC name resolution.
+
+export interface ResolveNameResult {
+  callsign: string;
+  checkinId: string;
+  name: string | null;
+  fccName: string | null;
+}
+
+export interface ReconcileResult {
+  checked: number;
+  silentlyResolved: number;
+  conflicts: number;
+  skipped: number;   // rows already NameConflict=TRUE — not re-processed
+  timedOut: boolean;
+  remaining: number;
+}

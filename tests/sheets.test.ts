@@ -96,6 +96,17 @@ describe('getOrCreateSheetWithHeader', () => {
     const setFrozen = sheet.setFrozenRows as unknown as jest.Mock;
     expect(setFrozen).toHaveBeenCalledWith(1);
   });
+
+  it('writes headers and freezes row 1 when existing sheet is blank', () => {
+    const ss = getSpreadsheetOrNull()!;
+    // Insert a blank sheet (simulates a pre-existing sheet with no data).
+    ss.insertSheet('Roster');
+    const { sheet, created } = getOrCreateSheetWithHeader(ss, 'Roster', ['Callsign', 'Name', 'LicenseClass']);
+    expect(created).toBe(false);
+    expect(sheet.getRange(1, 1, 1, 3).getValues()).toEqual([['Callsign', 'Name', 'LicenseClass']]);
+    const setFrozen = sheet.setFrozenRows as unknown as jest.Mock;
+    expect(setFrozen).toHaveBeenCalledWith(1);
+  });
 });
 
 describe('appendRowAndGetIndex', () => {

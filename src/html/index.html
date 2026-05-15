@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>WashCoARES Net Control</title>
     <style>
-      /* Slice 1 visual baseline. WCAG-AA contrast; 48px tap targets. */
+      /* WCAG-AA contrast; 48px tap targets. */
       * { box-sizing: border-box; }
       html, body {
         margin: 0;
@@ -79,16 +79,102 @@
         margin: 12px 0;
       }
       .checkin-list li {
-        padding: 12px;
+        padding: 10px 12px;
         border-bottom: 1px solid #eee;
-        font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
-        display: flex;
-        justify-content: space-between;
+        display: grid;
+        grid-template-columns: auto 1fr auto auto;
+        gap: 8px;
+        align-items: center;
       }
       .checkin-list li.flash { animation: flash 0.6s; }
       @keyframes flash {
         from { background: #fff5cc; }
         to { background: transparent; }
+      }
+      /* Recognition checkbox */
+      .recog-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .recog-check {
+        width: 24px;
+        height: 24px;
+        min-height: unset;
+        cursor: pointer;
+        accent-color: #0b69d3;
+        margin: 0;
+        padding: 0;
+        border: none;
+      }
+      /* Callsign + name column */
+      .cs-col {
+        font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+        overflow: hidden;
+      }
+      .cs-primary { font-size: 18px; }
+      .cs-name {
+        font-size: 14px;
+        color: #555;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* Name-status pills */
+      .name-pill {
+        font-size: 13px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        font-weight: 600;
+        border: none;
+        cursor: default;
+        display: inline-block;
+        margin-top: 2px;
+      }
+      .name-pill.searching {
+        background: #e0edff;
+        color: #0b4a9f;
+      }
+      .name-pill.check-back {
+        background: #fff3cd;
+        color: #664d03;
+        cursor: pointer;
+        text-decoration: underline;
+      }
+      /* Tap count */
+      .tap-count {
+        font-size: 15px;
+        color: #777;
+        white-space: nowrap;
+      }
+      /* Inline name form inside the list item */
+      .name-form-wrap {
+        grid-column: 1 / -1;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        padding-top: 6px;
+      }
+      .name-form-wrap input {
+        flex: 1;
+        min-height: 40px;
+        font-size: 16px;
+        margin: 0;
+      }
+      .name-form-wrap button {
+        width: auto;
+        min-height: 40px;
+        font-size: 15px;
+        padding: 4px 12px;
+        margin: 0;
+      }
+      .name-form-label {
+        font-size: 14px;
+        color: #333;
+        font-weight: 600;
+        grid-column: 1 / -1;
       }
       /* Slice 2: Suffix-Tap candidate list */
       .candidates-row {
@@ -137,6 +223,22 @@
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       }
       .small { font-size: 15px; color: #555; }
+      /* FCC ID timer */
+      .fcc-timer {
+        display: inline-block;
+        font-size: 15px;
+        font-weight: 700;
+        padding: 2px 10px;
+        border-radius: 8px;
+        background: #e8f4e8;
+        color: #1a5c1a;
+        cursor: pointer;
+        user-select: none;
+        margin-left: 8px;
+        vertical-align: middle;
+      }
+      .fcc-timer.amber { background: #fff3cd; color: #664d03; }
+      .fcc-timer.red   { background: #fde8e8; color: #b00020; }
     </style>
   </head>
   <body>
@@ -174,7 +276,11 @@
       <!-- Screen 2: Logging -->
       <section id="screen-log" aria-labelledby="log-title">
         <div class="header-strip">
-          <h1 id="log-title"><span id="hdr-nco"></span> &middot; <span id="hdr-type"></span> &middot; <span id="hdr-time"></span></h1>
+          <h1 id="log-title">
+            <span id="hdr-nco"></span> &middot; <span id="hdr-type"></span> &middot; <span id="hdr-time"></span>
+            <span id="fcc-timer" class="fcc-timer" role="button" tabindex="0"
+                  aria-label="FCC ID timer — tap to reset">10:00</span>
+          </h1>
           <p class="counters"><span id="cnt-total">0</span> check-ins &middot; <span id="cnt-unique">0</span> unique</p>
         </div>
 
@@ -185,8 +291,7 @@
         </div>
         <p id="e-callsign" class="field-error" role="alert"></p>
 
-        <!-- Slice 2: Suffix-Tap candidate list. Hidden until onLog suffix-only
-             branch renders matches; dismissed via Escape or btn-candidates-cancel. -->
+        <!-- Slice 2: Suffix-Tap candidate list -->
         <div id="candidates-row" class="candidates-row" hidden>
           <p id="candidates-prompt" aria-live="polite">Suffix matches:</p>
           <ul id="candidates-list" class="candidates-list"></ul>
@@ -243,7 +348,6 @@
                    h.slice(10, 16).join('');
           }
         }
-        // Last-resort non-cryptographic fallback for ancient browsers with no crypto at all.
         if (typeof console !== 'undefined' && console.warn) {
           console.warn('uuid4: crypto unavailable; using Math.random (NOT cryptographically secure)');
         }
@@ -257,40 +361,41 @@
       }
 
       // -----------------------------------------------------------------
-      // Client-side validators (mirror server regexes in src/server/validators.ts).
-      // CALLSIGN_RE: full FCC callsign — optional DX prefix + base + optional /SUFFIX.
-      // SUFFIX_ONLY_RE: bare 1-3 letter suffix, no digit (e.g. "ABC"). Lets the
-      // client surface a targeted "type the full callsign" message until Suffix-Tap
-      // ships; the predicate also becomes the entry condition for that flow later.
+      // Client-side validators (mirror server regexes in validators.ts).
       // -----------------------------------------------------------------
       var CALLSIGN_RE = /^(?:[A-Z]{1,3}[0-9][A-Z]{0,2}\/)?[A-Z]{1,2}[0-9][A-Z]{1,3}(?:\/[A-Z0-9]{1,5})?$/;
       var SUFFIX_ONLY_RE = /^[A-Z]{1,3}$/;
       var DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
       var TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+      var CSV_INJECT_RE = /^[=+\-@]/;
 
-      // Slice 2 — Suffix-Tap inline error messages.
       var LOADING_ROSTER_MSG = 'Loading roster — try again in a moment.';
       var ROSTER_UNAVAILABLE_MSG = 'Roster unavailable — type the full callsign (e.g. W7ABC).';
       var ROSTER_EMPTY_MSG = 'Roster is empty — type the full callsign.';
       var MAX_CANDIDATES = 10;
+      var MAX_NAME_LEN = 64;
+
       function validCallsign(s) { return typeof s === 'string' && s.length <= 18 && CALLSIGN_RE.test(s); }
       function isLikelySuffixOnly(s) { return typeof s === 'string' && SUFFIX_ONLY_RE.test(s); }
       function validDate(s) { return typeof s === 'string' && DATE_RE.test(s); }
       function validTime(s) { return typeof s === 'string' && TIME_RE.test(s); }
 
       // -----------------------------------------------------------------
-      // In-memory client state. Wiped on refresh — Slice 1 accepts this.
+      // In-memory client state.
       // -----------------------------------------------------------------
       var NetControl = {
         sessionId: null,
         netType: '', ncoCallsign: '', netTime: '',
-        checkins: new Map(),  // callsign -> { checkinId, firstTimestamp, latestTimestamp, tapCount }
-        history: [],          // ordered list of callsigns in event order (newest first)
+        // callsign → { checkinId, tapCount, name, resolveAsync, nameSearchFailed }
+        checkins: new Map(),
+        history: [],          // ordered list of callsigns newest-first
         inFlightStart: null,  // { requestId, input }
         inFlightCheckin: null,// { eventId, callsign }
-        roster: [],           // RosterEntry[] populated by getRosterSnapshot after startSession
-        rosterLoaded: false,  // true once getRosterSnapshot has returned (even if it returned []) — disambiguates "still loading" from "loaded and empty"
+        roster: [],           // RosterEntry[] populated by getRosterSnapshot
+        rosterLoaded: false,
         rosterLoadError: false,
+        // null | { callsign, checkinId } — which list item has the manual-name form open
+        manualNameForm: null,
       };
 
       // -----------------------------------------------------------------
@@ -330,6 +435,24 @@
         $('end-total').textContent = total;
         $('end-unique').textContent = NetControl.checkins.size;
       }
+
+      // -----------------------------------------------------------------
+      // Recognition checkbox — state stored in sessionStorage.
+      // Key: sessionId + ':' + checkinId (stable across renders).
+      // -----------------------------------------------------------------
+      function recogKey(checkinId) {
+        return (NetControl.sessionId || '') + ':' + checkinId;
+      }
+      function getRecog(checkinId) {
+        try { return sessionStorage.getItem(recogKey(checkinId)) === '1'; } catch (_) { return false; }
+      }
+      function setRecog(checkinId, val) {
+        try { sessionStorage.setItem(recogKey(checkinId), val ? '1' : '0'); } catch (_) {}
+      }
+
+      // -----------------------------------------------------------------
+      // Render checkin list.
+      // -----------------------------------------------------------------
       function renderList(flashCallsign) {
         var ul = $('checkin-list');
         ul.textContent = '';
@@ -339,31 +462,165 @@
           if (!entry) return;
           var li = document.createElement('li');
           if (cs === flashCallsign) li.className = 'flash';
-          var left = document.createElement('span');
-          left.textContent = cs;
-          var right = document.createElement('span');
-          right.textContent = '×' + entry.tapCount;
-          li.appendChild(left);
-          li.appendChild(right);
+
+          // Column 1: recognition checkbox.
+          var recogWrap = document.createElement('div');
+          recogWrap.className = 'recog-wrap';
+          var chk = document.createElement('input');
+          chk.type = 'checkbox';
+          chk.className = 'recog-check';
+          chk.checked = getRecog(entry.checkinId);
+          chk.title = 'Recognized';
+          chk.setAttribute('aria-label', 'Recognized ' + cs);
+          (function(cid) {
+            chk.addEventListener('change', function () { setRecog(cid, chk.checked); });
+          })(entry.checkinId);
+          recogWrap.appendChild(chk);
+          li.appendChild(recogWrap);
+
+          // Column 2: callsign + name/pill.
+          var csCol = document.createElement('div');
+          csCol.className = 'cs-col';
+
+          var csSpan = document.createElement('div');
+          csSpan.className = 'cs-primary';
+          csSpan.textContent = cs;
+          csCol.appendChild(csSpan);
+
+          var isManualFormOpen = NetControl.manualNameForm &&
+            NetControl.manualNameForm.checkinId === entry.checkinId;
+
+          if (!isManualFormOpen) {
+            if (entry.name) {
+              var nameDiv = document.createElement('div');
+              nameDiv.className = 'cs-name';
+              nameDiv.textContent = entry.name;
+              csCol.appendChild(nameDiv);
+            } else if (entry.resolveAsync && !entry.nameSearchFailed) {
+              var pill = document.createElement('span');
+              pill.className = 'name-pill searching';
+              pill.textContent = 'Searching…';
+              csCol.appendChild(pill);
+            } else if (entry.nameSearchFailed) {
+              var cbBtn = document.createElement('button');
+              cbBtn.className = 'name-pill check-back';
+              cbBtn.textContent = 'Check back';
+              cbBtn.type = 'button';
+              (function(callsignCopy, checkinIdCopy) {
+                cbBtn.addEventListener('click', function () {
+                  NetControl.manualNameForm = { callsign: callsignCopy, checkinId: checkinIdCopy };
+                  renderList(null);
+                });
+              })(cs, entry.checkinId);
+              csCol.appendChild(cbBtn);
+            }
+          }
+          li.appendChild(csCol);
+
+          // Column 3: tap count.
+          var tapSpan = document.createElement('span');
+          tapSpan.className = 'tap-count';
+          tapSpan.textContent = '\xd7' + entry.tapCount;
+          li.appendChild(tapSpan);
+
+          // Manual name form (spans all columns when open).
+          if (isManualFormOpen) {
+            var labelDiv = document.createElement('div');
+            labelDiv.className = 'name-form-label';
+            labelDiv.textContent = 'Name you heard:';
+            li.appendChild(labelDiv);
+
+            var formWrap = document.createElement('div');
+            formWrap.className = 'name-form-wrap';
+
+            var nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.maxLength = MAX_NAME_LEN;
+            nameInput.placeholder = 'e.g. Smith, John';
+            formWrap.appendChild(nameInput);
+
+            var saveBtn = document.createElement('button');
+            saveBtn.type = 'button';
+            saveBtn.textContent = 'Save';
+            (function(callsignCopy, checkinIdCopy, entryRef, inputRef) {
+              saveBtn.addEventListener('click', function () {
+                var typed = inputRef.value.trim();
+                if (!typed) return;
+                if (typed.length > MAX_NAME_LEN) {
+                  toast('Name too long (max ' + MAX_NAME_LEN + ' chars).');
+                  return;
+                }
+                if (CSV_INJECT_RE.test(typed)) {
+                  toast('Name cannot start with = + - @');
+                  return;
+                }
+                // Optimistic update.
+                entryRef.name = typed;
+                entryRef.nameSearchFailed = false;
+                NetControl.manualNameForm = null;
+                renderList(null);
+                // Persist to server.
+                google.script.run
+                  .withSuccessHandler(function () { /* no-op — already updated */ })
+                  .withFailureHandler(function () {
+                    toast('Could not save name — try again.');
+                    entryRef.name = null;
+                    entryRef.nameSearchFailed = true;
+                    renderList(null);
+                  })
+                  .setManualName(callsignCopy, checkinIdCopy, typed);
+              });
+            })(cs, entry.checkinId, entry, nameInput);
+            formWrap.appendChild(saveBtn);
+
+            var cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'secondary';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.style.marginLeft = '4px';
+            cancelBtn.addEventListener('click', function () {
+              NetControl.manualNameForm = null;
+              renderList(null);
+            });
+            formWrap.appendChild(cancelBtn);
+
+            li.appendChild(formWrap);
+            // Focus the input after DOM insertion (next tick).
+            setTimeout(function () { nameInput.focus(); }, 0);
+          }
+
           ul.appendChild(li);
         });
       }
 
       // -----------------------------------------------------------------
+      // Async name resolution — fired when recordCheckin returns resolveAsync=true.
+      // -----------------------------------------------------------------
+      function startNameResolution(callsign, checkinId) {
+        google.script.run
+          .withSuccessHandler(function (result) {
+            var entry = NetControl.checkins.get(callsign);
+            if (!entry || entry.checkinId !== checkinId) return; // stale
+            if (result && result.name) {
+              entry.name = result.name;
+              entry.resolveAsync = false;
+              entry.nameSearchFailed = false;
+            } else {
+              entry.nameSearchFailed = true;
+            }
+            renderList(null);
+          })
+          .withFailureHandler(function () {
+            var entry = NetControl.checkins.get(callsign);
+            if (!entry || entry.checkinId !== checkinId) return;
+            entry.nameSearchFailed = true;
+            renderList(null);
+          })
+          .resolveName(callsign, checkinId);
+      }
+
+      // -----------------------------------------------------------------
       // Slice 2 — Suffix-Tap helpers.
-      //
-      // findCandidatesBySuffix: PRD FR-3 priority order (Slice 2 cut: bands
-      // 1 + 2 only). Returns up to MAX_CANDIDATES RosterEntry objects:
-      //   Band 1: recent-this-net — iterate NetControl.history (newest-first),
-      //           filter to callsigns still in NetControl.checkins, filter by
-      //           endsWith(suffix). Name is looked up from NetControl.roster
-      //           (if not in roster, name is empty).
-      //   Band 2: NetControl.roster entries that endsWith(suffix), excluding
-      //           any callsign already in band 1. Declaration order preserved.
-      //
-      // Caller-contract: `suffix` is 1-3 ALL-CAPS letters (caller already
-      // validated via SUFFIX_ONLY_RE). Defensive `if (!suffix) return [];`
-      // guards against a future regression in the caller.
       // -----------------------------------------------------------------
       function findCandidatesBySuffix(suffix) {
         if (!suffix) return [];
@@ -376,12 +633,12 @@
           var cs = NetControl.history[i];
           if (!NetControl.checkins.has(cs)) continue;
           if (!cs.endsWith(suffix)) continue;
-          if (band1Set.has(cs)) continue; // defensive against duplicates in history
+          if (band1Set.has(cs)) continue;
           var rosterRow = rosterByCallsign.get(cs);
           band1.push({
             callsign: cs,
             name: rosterRow ? rosterRow.name : '',
-            lastActive: rosterRow ? rosterRow.lastActive : '',
+            licenseClass: rosterRow ? rosterRow.licenseClass : '',
             recent: true,
           });
           band1Set.add(cs);
@@ -396,7 +653,7 @@
           band2.push({
             callsign: r.callsign,
             name: r.name,
-            lastActive: r.lastActive,
+            licenseClass: r.licenseClass,
             recent: false,
           });
         }
@@ -404,12 +661,9 @@
         return band1.concat(band2);
       }
 
-      // The stable function reference used by addEventListener / removeEventListener
-      // so the listener can actually be removed on dismiss (a fresh closure would
-      // not match for removal).
       function onCandidatesKeydown(e) {
         if (e.key !== 'Escape') return;
-        if ($('candidates-row').hidden) return; // no-op when list isn't up
+        if ($('candidates-row').hidden) return;
         e.preventDefault();
         dismissCandidates();
       }
@@ -425,14 +679,11 @@
           btn.type = 'button';
           btn.className = 'candidate';
           btn.dataset.callsign = c.callsign;
-          // Build textContent: "W7ABC" if name empty, else "W7ABC — Name".
-          // No innerHTML — Sheet-controlled name is rendered as text only.
           btn.textContent = c.name ? c.callsign + ' — ' + c.name : c.callsign;
           if (c.recent) {
             var chip = document.createElement('span');
             chip.className = 'recent-badge';
             chip.textContent = 'this net';
-            // Space before the chip so screen-reader announces them as separate words.
             btn.appendChild(document.createTextNode(' '));
             btn.appendChild(chip);
           }
@@ -441,12 +692,8 @@
         });
         $('candidates-row').hidden = false;
         $('btn-log').disabled = true;
-        // Idempotent listener attach: remove first so a future code path that
-        // calls renderCandidates twice (without an intervening dismiss) doesn't
-        // stack the listener.
         document.removeEventListener('keydown', onCandidatesKeydown);
         document.addEventListener('keydown', onCandidatesKeydown);
-        // Focus the first candidate so Enter commits the top one.
         var first = ul.querySelector('button.candidate');
         if (first) first.focus();
       }
@@ -454,25 +701,14 @@
       function dismissCandidates() {
         $('candidates-row').hidden = true;
         $('btn-log').disabled = false;
-        // Defensive re-enable of any candidate buttons that were disabled
-        // by an in-flight onCandidateTap.
         var btns = document.querySelectorAll('#candidates-list .candidate');
         btns.forEach(function (b) { b.disabled = false; });
-        // Re-enable the callsign input. onCandidateTap may have disabled it
-        // and is still awaiting recordCheckin; the cancel-token trip will
-        // also re-enable it later, but doing it here makes the user-perceived
-        // cancel latency zero rather than 50ms–2s.
         $('f-callsign').disabled = false;
         NetControl.inFlightCheckin = null;
         document.removeEventListener('keydown', onCandidatesKeydown);
         $('f-callsign').focus();
       }
 
-      // Wipe per-session client state. Called when the server tells us the
-      // session is gone (SESSION_NOT_FOUND / SESSION_CLOSED) so the next
-      // startSession sees a clean slate rather than inheriting the prior
-      // session's checkins, history, and roster snapshot. Does NOT touch
-      // start-form values or inFlightStart — that's `onNewNet`'s job.
       function resetSessionLocalState() {
         NetControl.sessionId = null;
         NetControl.checkins = new Map();
@@ -481,26 +717,46 @@
         NetControl.roster = [];
         NetControl.rosterLoaded = false;
         NetControl.rosterLoadError = false;
+        NetControl.manualNameForm = null;
         renderCounters();
         renderList(null);
+        stopFccTimer();
+      }
+
+      // Shared bookkeeping after a successful recordCheckin result.
+      function applyCheckinResult(callsign, result) {
+        var existing = NetControl.checkins.get(callsign);
+        var entry = existing || {
+          checkinId: result.checkinId,
+          tapCount: 0,
+          name: null,
+          resolveAsync: false,
+          nameSearchFailed: false,
+        };
+        entry.tapCount = result.tapCount;
+        // On first event: store resolved name (if any) and async flag.
+        if (result.firstEventForCallsignInSession) {
+          entry.checkinId = result.checkinId;
+          entry.name = result.resolvedName || null;
+          entry.resolveAsync = !!result.resolveAsync;
+          entry.nameSearchFailed = false;
+        }
+        NetControl.checkins.set(callsign, entry);
+        NetControl.history = [callsign].concat(
+          NetControl.history.filter(function (c) { return c !== callsign; })
+        );
+        // Fire async FCC lookup if needed.
+        if (result.firstEventForCallsignInSession && result.resolveAsync) {
+          startNameResolution(callsign, result.checkinId);
+        }
       }
 
       async function onCandidateTap(callsign) {
-        // Capture the eventId locally as a cancel token. If `dismissCandidates`
-        // fires while we're awaiting (Escape or Cancel button), the post-await
-        // side-effects MUST NOT run — otherwise a cancelled tap still mutates
-        // checkins + history + DOM and would stomp the user's input via
-        // `$('f-callsign').value = ''`. Server-side, the recordCheckin row may
-        // still have been written; that's inherent to in-flight network calls
-        // and out of scope here.
         var localEventId = NetControl.inFlightCheckin && NetControl.inFlightCheckin.eventId;
-        if (!localEventId) return; // defensive — shouldn't happen via the wired flow
+        if (!localEventId) return;
 
         var btns = document.querySelectorAll('#candidates-list .candidate');
         btns.forEach(function (b) { b.disabled = true; });
-        // Also disable the callsign input during the in-flight tap so user
-        // typing during the ~2 s BUSY-backoff window can't be wiped by the
-        // success path's input-clear.
         $('f-callsign').disabled = true;
         try {
           var result = await callWithRetry('recordCheckin', {
@@ -508,29 +764,15 @@
             callsign: callsign,
             eventId: localEventId,
           });
-          // Gate: was this tap cancelled while we were awaiting?
+          // Cancel-token check.
           if (!NetControl.inFlightCheckin || NetControl.inFlightCheckin.eventId !== localEventId) {
-            // Ownership rule: the live owner of #f-callsign's disabled state
-            // is whichever flow currently holds NetControl.inFlightCheckin.
-            // Since the gate just told us we are NOT that owner, do NOT
-            // touch #f-callsign.disabled — a fresh onCandidateTap from a new
-            // candidate-list cycle may have intentionally disabled it, and
-            // re-enabling here would let the user type during the new tap's
-            // BUSY-backoff window and have that typing wiped on its success.
-            // The candidate buttons we captured are detached from DOM by the
-            // intervening renderCandidates / dismissCandidates, so re-enabling
-            // them is a defensive no-op.
             btns.forEach(function (b) { b.disabled = false; });
             return;
           }
           if (!result || !result.ok) {
             if (result && (result.error === 'SESSION_NOT_FOUND' || result.error === 'SESSION_CLOSED')) {
               toast(result.error === 'SESSION_CLOSED' ? 'Net already ended.' : 'Session expired — start a new net.');
-              // Tear down candidate-list state so the next session doesn't
-              // inherit a stale visible candidate list, a disabled LOG button,
-              // a leaked keydown listener, or a stale inFlightCheckin.
               dismissCandidates();
-              // Clear per-session client state so the new session starts clean.
               resetSessionLocalState();
               $('f-callsign').disabled = false;
               showScreen('screen-start');
@@ -542,21 +784,14 @@
             } else {
               toast('Could not log check-in.');
             }
-            // Re-enable candidate buttons + input so user can pick again.
             btns.forEach(function (b) { b.disabled = false; });
             $('f-callsign').disabled = false;
             return;
           }
-          // Mirror onLog's success-path bookkeeping.
-          var existing = NetControl.checkins.get(callsign);
-          var entry = existing || { checkinId: result.checkinId, firstTimestamp: '', latestTimestamp: '', tapCount: 0 };
-          entry.tapCount = result.tapCount;
-          NetControl.checkins.set(callsign, entry);
-          NetControl.history = [callsign].concat(NetControl.history.filter(function (c) { return c !== callsign; }));
+          applyCheckinResult(callsign, result);
           NetControl.inFlightCheckin = null;
           renderCounters();
           renderList(result.deduped ? null : callsign);
-          // Hide the candidate list, clear the input, restore focus.
           $('candidates-row').hidden = true;
           $('btn-log').disabled = false;
           $('f-callsign').disabled = false;
@@ -564,10 +799,6 @@
           $('f-callsign').value = '';
           $('f-callsign').focus();
         } catch (e) {
-          // Gate: same cancel-token check on the error path. Ownership rule
-          // applies — see the success-path gate's comment for the full
-          // rationale; do NOT re-enable #f-callsign.disabled when we are not
-          // the current owner of inFlightCheckin.
           if (!NetControl.inFlightCheckin || NetControl.inFlightCheckin.eventId !== localEventId) {
             btns.forEach(function (b) { b.disabled = false; });
             return;
@@ -579,7 +810,50 @@
       }
 
       // -----------------------------------------------------------------
-      // Server call helpers (Promise wrappers around google.script.run).
+      // FCC 10-minute ID timer.
+      // -----------------------------------------------------------------
+      var fccTimerInterval = null;
+      var fccTimerSecondsLeft = 600; // 10 minutes
+
+      function updateFccTimerDisplay() {
+        var el = $('fcc-timer');
+        if (!el) return;
+        var m = Math.floor(fccTimerSecondsLeft / 60);
+        var s = fccTimerSecondsLeft % 60;
+        el.textContent = m + ':' + String(s).padStart(2, '0');
+        el.classList.remove('amber', 'red');
+        if (fccTimerSecondsLeft <= 0) {
+          el.classList.add('red');
+        } else if (fccTimerSecondsLeft <= 120) {
+          el.classList.add('amber');
+        }
+      }
+
+      function startFccTimer() {
+        stopFccTimer();
+        fccTimerSecondsLeft = 600;
+        updateFccTimerDisplay();
+        fccTimerInterval = setInterval(function () {
+          if (fccTimerSecondsLeft > 0) fccTimerSecondsLeft--;
+          updateFccTimerDisplay();
+        }, 1000);
+      }
+
+      function stopFccTimer() {
+        if (fccTimerInterval !== null) {
+          clearInterval(fccTimerInterval);
+          fccTimerInterval = null;
+        }
+        fccTimerSecondsLeft = 600;
+      }
+
+      function resetFccTimer() {
+        fccTimerSecondsLeft = 600;
+        updateFccTimerDisplay();
+      }
+
+      // -----------------------------------------------------------------
+      // Server call helpers.
       // -----------------------------------------------------------------
       function callServer(method, payload) {
         return new Promise(function (resolve, reject) {
@@ -590,13 +864,10 @@
       }
       function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-      // Retry an idempotent server call: 1 outer network-error retry, up to 3
-      // inner BUSY_TRY_AGAIN retries. Max 4 server calls total per logical action.
       async function callWithRetry(method, payload) {
         var networkRetries = 1;
         while (true) {
           try {
-            // Inner loop: handle BUSY_TRY_AGAIN.
             var backoffs = [250, 500, 1000];
             var lastResult = null;
             for (var i = 0; i < backoffs.length + 1; i++) {
@@ -654,7 +925,6 @@
         if (!validCallsign(input.ncoCallsign)) { setFieldError('e-nco', 'Callsigns are letters, digits, and / only (e.g. W7ABC).'); ok = false; }
         if (!ok) return;
 
-        // Preserve requestId across retries.
         if (!NetControl.inFlightStart) {
           NetControl.inFlightStart = { requestId: uuid4(), input: input };
         }
@@ -682,19 +952,16 @@
           renderCounters();
           renderList(null);
           showScreen('screen-log');
+          startFccTimer();
           setTimeout(function () { $('f-callsign').focus(); }, 0);
 
-          // Fire-and-forget roster fetch. We don't await — Logging screen
-          // appears immediately. Capture sessionId in a closure so a late-
-          // resolving snapshot doesn't pollute a subsequent session's state.
+          // Fire-and-forget roster fetch.
           var fetchSessionId = NetControl.sessionId;
           callWithRetry('getRosterSnapshot', {}).then(function (snap) {
             if (NetControl.sessionId !== fetchSessionId) return;
             if (snap && snap.ok) {
               NetControl.roster = snap.roster;
               NetControl.rosterLoaded = true;
-              // Late-resolution UX cue: if we're currently showing the
-              // "Loading roster" inline error, clear it now.
               if ($('e-callsign').textContent === LOADING_ROSTER_MSG) {
                 setFieldError('e-callsign', '');
               }
@@ -720,9 +987,6 @@
         var raw = $('f-callsign').value.trim().toUpperCase();
         if (!validCallsign(raw)) {
           if (isLikelySuffixOnly(raw)) {
-            // Mint the eventId now and stash in inFlightCheckin (callsign null
-            // until the NCO picks one); onCandidateTap reuses this eventId so
-            // a BUSY-retry doesn't double-log.
             if (!NetControl.inFlightCheckin) {
               NetControl.inFlightCheckin = { eventId: uuid4(), callsign: null };
             }
@@ -732,24 +996,16 @@
               return;
             }
             if (!NetControl.rosterLoaded) {
-              // Snapshot hasn't returned yet. Distinct from loaded-but-empty.
               setFieldError('e-callsign', LOADING_ROSTER_MSG);
               NetControl.inFlightCheckin = null;
               return;
             }
-            // Run the candidate lookup BEFORE the empty-roster check —
-            // band 1 (recent-this-net) doesn't depend on the roster, so a
-            // callsign the NCO already logged via direct LOG should still
-            // surface as a candidate even when the Roster tab is empty.
             var candidates = findCandidatesBySuffix(raw);
             if (candidates.length > 0) {
               renderCandidates(candidates);
               return;
             }
-            // Zero candidates: pick the most informative message based on
-            // why nothing matched.
             if (NetControl.roster.length === 0) {
-              // Roster is empty AND no recent-this-net match either.
               setFieldError('e-callsign', ROSTER_EMPTY_MSG);
             } else {
               setFieldError(
@@ -792,13 +1048,7 @@
             }
             return;
           }
-          // Update client state.
-          var existing = NetControl.checkins.get(raw);
-          var entry = existing || { checkinId: result.checkinId, firstTimestamp: '', latestTimestamp: '', tapCount: 0 };
-          entry.tapCount = result.tapCount;
-          NetControl.checkins.set(raw, entry);
-          // Move callsign to the top of history.
-          NetControl.history = [raw].concat(NetControl.history.filter(function (c) { return c !== raw; }));
+          applyCheckinResult(raw, result);
           NetControl.inFlightCheckin = null;
           renderCounters();
           renderList(result.deduped ? null : raw);
@@ -826,6 +1076,7 @@
             toast('Could not end net.');
             return;
           }
+          stopFccTimer();
           $('sum-total').textContent = result.checkinCount;
           $('sum-unique').textContent = result.uniqueCallsignCount;
           $('sum-hours').textContent = result.hoursTotal;
@@ -849,12 +1100,14 @@
           roster: [],
           rosterLoaded: false,
           rosterLoadError: false,
+          manualNameForm: null,
         };
         ['f-net-type','f-nco','f-repeater','f-notes','f-callsign'].forEach(function (id) {
           var el = $(id); if (el) el.value = '';
         });
         clearAllStartErrors();
         initStartDefaults();
+        stopFccTimer();
         showScreen('screen-start');
       }
 
@@ -867,12 +1120,7 @@
         $('btn-log').addEventListener('click', onLog);
         $('f-callsign').addEventListener('keydown', function (e) {
           if (e.key !== 'Enter') return;
-          // Always preventDefault first so a future refactor that wraps this
-          // input in a <form> doesn't let Enter trigger implicit form submit
-          // even when the candidate list is up.
           e.preventDefault();
-          // Gate: Enter must not bypass the disabled LOG button when the
-          // candidate list is showing. Cancel/Escape are the only dismissals.
           if (!$('candidates-row').hidden) return;
           onLog();
         });
@@ -880,6 +1128,15 @@
         $('btn-end-cancel').addEventListener('click', onEndCancel);
         $('btn-end-confirm').addEventListener('click', onEndConfirm);
         $('btn-new-net').addEventListener('click', onNewNet);
+
+        // FCC ID timer: tap to reset.
+        var timerEl = $('fcc-timer');
+        if (timerEl) {
+          timerEl.addEventListener('click', resetFccTimer);
+          timerEl.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); resetFccTimer(); }
+          });
+        }
 
         // Slice 2 wiring: candidate-list click delegation + cancel button.
         $('candidates-list').addEventListener('click', function (e) {

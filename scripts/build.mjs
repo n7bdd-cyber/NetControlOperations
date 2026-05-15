@@ -46,12 +46,19 @@ async function main() {
     globalName: '__app__',
     footer: {
       js: [
+        // Slice 1-2 functions.
         'function doGet() { return __app__.doGet.apply(this, arguments); }',
         'function startSession() { return __app__.startSession.apply(this, arguments); }',
         'function recordCheckin() { return __app__.recordCheckin.apply(this, arguments); }',
         'function endSession() { return __app__.endSession.apply(this, arguments); }',
         'function setupSheets() { return __app__.setupSheets.apply(this, arguments); }',
         'function getRosterSnapshot() { return __app__.getRosterSnapshot.apply(this, arguments); }',
+        // Slice 3 functions.
+        'function resolveName() { return __app__.resolveName.apply(this, arguments); }',
+        'function setManualName() { return __app__.setManualName.apply(this, arguments); }',
+        'function reconcileOthersNames() { return __app__.reconcileOthersNames.apply(this, arguments); }',
+        'function sundaySync() { return __app__.sundaySync.apply(this, arguments); }',
+        'function installSundaySyncTrigger() { return __app__.installSundaySyncTrigger.apply(this, arguments); }',
       ].join('\n'),
     },
     target: 'es2020',

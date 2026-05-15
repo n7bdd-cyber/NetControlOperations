@@ -3,9 +3,10 @@
  *
  * Teaching notes:
  *  - Apps Script provides globals like `SpreadsheetApp`, `Session`, `LockService`,
- *    `PropertiesService`, `Utilities`, `HtmlService`, `Logger` that don't exist
- *    in Node. To unit-test server code locally, we install fake versions of these
- *    on `globalThis` before each test.
+ *    `PropertiesService`, `Utilities`, `HtmlService`, `Logger`, `UrlFetchApp`,
+ *    `MailApp`, `DriveApp`, `ScriptApp` that don't exist in Node. To unit-test
+ *    server code locally, we install fake versions of these on `globalThis` before
+ *    each test.
  *  - This file is loaded by jest via the `setupFilesAfterEach` config in
  *    jest.config.js. It registers a `beforeEach(resetMocks)` hook so every test
  *    starts from a known state.
@@ -17,6 +18,16 @@
 // Test-controlled state (reset between tests).
 // ---------------------------------------------------------------------------
 
+interface MockDriveFile {
+  id: string;
+  content: string;
+  lastUpdated: Date;
+}
+
+interface MockTrigger {
+  getHandlerFunction: () => string;
+}
+
 interface MockState {
   props: Map<string, string>;
   uuids: string[]; // queue: getUuid() shifts from the front
@@ -27,6 +38,12 @@ interface MockState {
   sheetReadThrows: Set<string>; // sheets whose getDataRange().getValues() should throw
   spreadsheetExists: boolean;
   logCalls: unknown[][];
+  urlFetchResponses: Map<string, string>; // url -> JSON response body
+  urlFetchThrows: boolean;
+  mailSentEmails: { to: string; subject: string; body: string }[];
+  driveFiles: Map<string, MockDriveFile>; // fileId -> file
+  driveFolderFiles: Map<string, string[]>; // folderId -> list of fileIds
+  scriptTriggers: MockTrigger[];
 }
 
 const state: MockState = {
@@ -39,6 +56,12 @@ const state: MockState = {
   sheetReadThrows: new Set(),
   spreadsheetExists: true,
   logCalls: [],
+  urlFetchResponses: new Map(),
+  urlFetchThrows: false,
+  mailSentEmails: [],
+  driveFiles: new Map(),
+  driveFolderFiles: new Map(),
+  scriptTriggers: [],
 };
 
 export const MOCK_SPREADSHEET_ID = 'MOCK_SPREADSHEET_ID';
@@ -87,6 +110,39 @@ export function getLogCalls(): unknown[][] {
   return state.logCalls;
 }
 
+// UrlFetchApp helpers.
+// `url` should be the full URL the server code will request.
+export function setMockUrlFetchResponse(url: string, body: string): void {
+  state.urlFetchResponses.set(url, body);
+}
+
+export function setMockUrlFetchThrows(throws: boolean): void {
+  state.urlFetchThrows = throws;
+}
+
+// MailApp helpers.
+export function getMailSentEmails(): { to: string; subject: string; body: string }[] {
+  return state.mailSentEmails;
+}
+
+// DriveApp helpers.
+export function setMockDriveFile(fileId: string, content: string, lastUpdated?: Date): void {
+  state.driveFiles.set(fileId, {
+    id: fileId,
+    content,
+    lastUpdated: lastUpdated ?? new Date(),
+  });
+}
+
+export function setMockDriveFolderFiles(folderId: string, fileIds: string[]): void {
+  state.driveFolderFiles.set(folderId, fileIds);
+}
+
+// ScriptApp helpers.
+export function getMockTriggers(): MockTrigger[] {
+  return state.scriptTriggers;
+}
+
 export function resetMocks(): void {
   state.props.clear();
   state.uuids = [];
@@ -97,6 +153,12 @@ export function resetMocks(): void {
   state.sheetReadThrows.clear();
   state.spreadsheetExists = true;
   state.logCalls = [];
+  state.urlFetchResponses.clear();
+  state.urlFetchThrows = false;
+  state.mailSentEmails = [];
+  state.driveFiles.clear();
+  state.driveFolderFiles.clear();
+  state.scriptTriggers = [];
   jest.clearAllMocks();
 }
 
@@ -150,6 +212,10 @@ function makeSheet(name: string, rows: unknown[][]) {
       rows.push([...values]);
     },
     setFrozenRows: jest.fn(),
+    deleteRow: (rowIndex: number) => {
+      // rowIndex is 1-based; splice is 0-based.
+      rows.splice(rowIndex - 1, 1);
+    },
     getRange: (row: number, col: number, numRows = 1, numCols = 1): MockRange => {
       // Sheet API is 1-based; our rows array is 0-based.
       const r0 = row - 1;
@@ -236,6 +302,17 @@ const mockSpreadsheet = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).Utilities = {
   getUuid: jest.fn(() => state.uuids.shift() ?? 'fallback-uuid'),
+  // Simple RFC-4180 CSV parser — handles quoted fields with embedded commas
+  // for basic test data, though not all edge cases.
+  parseCsv: jest.fn((text: string) =>
+    text
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      .map((line) =>
+        line.split(',').map((cell) => cell.trim().replace(/^"|"$/g, '')),
+      ),
+  ),
+  sleep: jest.fn(),
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -252,6 +329,84 @@ const mockSpreadsheet = {
 (globalThis as any).Logger = {
   log: jest.fn((...args: unknown[]) => {
     state.logCalls.push(args);
+  }),
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).UrlFetchApp = {
+  fetch: jest.fn((url: string) => {
+    if (state.urlFetchThrows) {
+      throw new Error('Mock: UrlFetchApp.fetch threw');
+    }
+    const body = state.urlFetchResponses.get(url) ?? '{"status":"NOT_FOUND"}';
+    return {
+      getContentText: jest.fn(() => body),
+    };
+  }),
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).MailApp = {
+  sendEmail: jest.fn((to: string, subject: string, body: string) => {
+    state.mailSentEmails.push({ to, subject, body });
+  }),
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).DriveApp = {
+  getFolderById: jest.fn((folderId: string) => {
+    const fileIds = state.driveFolderFiles.get(folderId) ?? [];
+    let idx = 0;
+    const files = fileIds.map((id) => state.driveFiles.get(id)).filter(Boolean) as MockDriveFile[];
+    return {
+      getFiles: jest.fn(() => ({
+        hasNext: jest.fn(() => idx < files.length),
+        next: jest.fn(() => {
+          const f = files[idx++];
+          return {
+            getId: jest.fn(() => f.id),
+            getMimeType: jest.fn(() => 'text/csv'),
+            getLastUpdated: jest.fn(() => f.lastUpdated),
+            getBlob: jest.fn(() => ({
+              getDataAsString: jest.fn(() => f.content),
+            })),
+          };
+        }),
+      })),
+    };
+  }),
+  getFileById: jest.fn((fileId: string) => {
+    const f = state.driveFiles.get(fileId);
+    if (!f) throw new Error(`Mock: file not found: ${fileId}`);
+    return {
+      getId: jest.fn(() => f.id),
+      getLastUpdated: jest.fn(() => f.lastUpdated),
+      getBlob: jest.fn(() => ({
+        getDataAsString: jest.fn(() => f.content),
+      })),
+    };
+  }),
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).ScriptApp = {
+  WeekDay: { SUNDAY: 0, MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3, THURSDAY: 4, FRIDAY: 5, SATURDAY: 6 },
+  getProjectTriggers: jest.fn(() => state.scriptTriggers),
+  deleteTrigger: jest.fn((trigger: MockTrigger) => {
+    state.scriptTriggers = state.scriptTriggers.filter((t) => t !== trigger);
+  }),
+  newTrigger: jest.fn((fnName: string) => {
+    const builder = {
+      timeBased: jest.fn().mockReturnThis(),
+      onWeekDay: jest.fn().mockReturnThis(),
+      atHour: jest.fn().mockReturnThis(),
+      create: jest.fn(() => {
+        const trigger: MockTrigger = { getHandlerFunction: () => fnName };
+        state.scriptTriggers.push(trigger);
+        return trigger;
+      }),
+    };
+    return builder;
   }),
 };
 
