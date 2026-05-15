@@ -59,6 +59,12 @@ async function main() {
         'function reconcileOthersNames() { return __app__.reconcileOthersNames.apply(this, arguments); }',
         'function sundaySync() { return __app__.sundaySync.apply(this, arguments); }',
         'function installSundaySyncTrigger() { return __app__.installSundaySyncTrigger.apply(this, arguments); }',
+        // Slice 4 functions.
+        'function getAdminStatus() { return __app__.getAdminStatus.apply(this, arguments); }',
+        'function getTemplates() { return __app__.getTemplates.apply(this, arguments); }',
+        'function getRepeaterSystems() { return __app__.getRepeaterSystems.apply(this, arguments); }',
+        'function saveTemplate() { return __app__.saveTemplate.apply(this, arguments); }',
+        'function deleteTemplate() { return __app__.deleteTemplate.apply(this, arguments); }',
       ].join('\n'),
     },
     target: 'es2020',

@@ -32,6 +32,9 @@ export const SESSIONS_HEADERS = [
   'EndTimestamp',
   'Status',
   'RequestId',
+  'NCOName',        // Slice 4 — appended; existing rows get blank on read
+  'NCOLocation',    // Slice 4
+  'RepeaterSystem', // Slice 4
 ] as const;
 
 // Name appended at index 10 — safe because existing Slices 1-2 rows have
@@ -65,6 +68,16 @@ export const OTHERS_HEADERS = [
 
 export const SETTINGS_HEADERS = ['Key', 'Value'] as const;
 
+export const TEMPLATES_HEADERS = [
+  'TemplateId', 'Name', 'Preamble', 'SectionsJson', 'Credits',
+  'IsDefault', 'CreatedAt', 'UpdatedAt', 'UpdatedBy', 'DeletedAt',
+] as const;
+
+export const REPEATERS_HEADERS = [
+  'SystemName', 'RepeaterName', 'Frequency', 'PlTone', 'Type',
+  'DisplayOrder', 'IsActive', 'Description', 'ClosingCredit',
+] as const;
+
 export const SessionsCol = {
   SessionID: 0,
   StartTimestamp: 1,
@@ -78,6 +91,9 @@ export const SessionsCol = {
   EndTimestamp: 9,
   Status: 10,
   RequestId: 11,
+  NCOName: 12,        // Slice 4
+  NCOLocation: 13,    // Slice 4
+  RepeaterSystem: 14, // Slice 4
 } as const;
 
 export const CheckinsCol = {
@@ -109,11 +125,38 @@ export const OthersCol = {
   LastActive: 5,
 } as const;
 
+export const TemplatesCol = {
+  TemplateId:   0,
+  Name:         1,
+  Preamble:     2,
+  SectionsJson: 3,
+  Credits:      4,
+  IsDefault:    5,
+  CreatedAt:    6,
+  UpdatedAt:    7,
+  UpdatedBy:    8,
+  DeletedAt:    9,
+} as const;
+
+export const RepeatersCol = {
+  SystemName:    0,
+  RepeaterName:  1,
+  Frequency:     2,
+  PlTone:        3,
+  Type:          4,
+  DisplayOrder:  5,
+  IsActive:      6,
+  Description:   7,
+  ClosingCredit: 8,
+} as const;
+
 export const SHEET_SESSIONS = 'Sessions';
 export const SHEET_CHECKINS = 'Checkins';
 export const SHEET_ROSTER = 'Roster';
 export const SHEET_OTHERS = 'Others';
 export const SHEET_SETTINGS = 'Settings';
+export const SHEET_TEMPLATES = 'Templates';
+export const SHEET_REPEATERS = 'Repeaters';
 
 export const SESSION_STATUS_OPEN = 'Open';
 export const SESSION_STATUS_CLOSED = 'Closed';
@@ -149,6 +192,18 @@ export const MAX_CALLSIGN = 18;
 export const MAX_ID_FIELD = 64; // requestId, eventId, sessionId, checkinId
 export const MAX_NAME = 64;     // setManualName — name the NCO heard on air
 
+// Slice 4 field length caps.
+export const MAX_NCO_NAME              = 100;
+export const MAX_NCO_LOCATION          = 100;
+export const MAX_SYSTEM_NAME           = 100;
+export const MAX_TEMPLATE_NAME         = 100;
+export const MAX_PREAMBLE              = 5000;
+export const MAX_CREDITS               = 2000;
+export const MAX_SECTION_TITLE         = 100;
+export const MAX_SECTION_CALL_TO_AIR   = 500;
+export const MAX_SECTION_NOTES         = 500;
+export const MAX_SECTIONS_PER_TEMPLATE = 20;
+
 // ---------------------------------------------------------------------------
 // Others tab types.
 // ---------------------------------------------------------------------------
@@ -165,17 +220,95 @@ export interface OthersEntry {
 }
 
 // ---------------------------------------------------------------------------
+// Slice 4 — Templates and Repeaters types.
+// ---------------------------------------------------------------------------
+
+export interface TemplateSection {
+  id:        string;   // UUID client-generated; unique within the template
+  title:     string;
+  callToAir: string;   // text read on air; {{variables}} substituted client-side
+  notes:     string;   // NCO-only instruction; NOT substituted; NOT read on air
+  order:     number;   // 1-based; unique within the template
+}
+
+export interface NetTemplate {
+  templateId:          string;
+  name:                string;
+  preamble:            string;
+  sections:            TemplateSection[];
+  credits:             string;
+  isDefault:           boolean;
+  createdAt:           string;
+  updatedAt:           string;
+  updatedBy:           string;   // Google email of last editor
+  deletedAt:           string;   // blank = active; non-blank = soft-deleted
+  sectionsParseError?: boolean;  // true when SectionsJson cell contained malformed JSON
+}
+
+export interface RepeaterEntry {
+  systemName:    string;
+  repeaterName:  string;
+  frequency:     string;
+  plTone:        string;
+  type:          string;   // raw value as stored; normalize only for classification
+  displayOrder:  number;
+  isActive:      boolean;
+  description:   string;
+  closingCredit: string;
+}
+
+export interface RepeaterSystem {
+  name:      string;
+  primary:   RepeaterEntry[];   // type (lowercase) === 'primary', sorted by displayOrder
+  linked:    RepeaterEntry[];   // type (lowercase) === 'linked', sorted by displayOrder
+  alternate: RepeaterEntry[];   // type (lowercase) === 'alternate', sorted by displayOrder
+  links:     RepeaterEntry[];   // all other types, sorted by displayOrder
+}
+
+export interface SaveTemplateInput {
+  template: NetTemplate;
+}
+
+export type SaveTemplateResult =
+  | { ok: true; templateId: string; updatedAt: string }
+  | { ok: false; error: 'NOT_AUTHORIZED' }
+  | { ok: false; error: 'INVALID_INPUT'; field: string; reason: string }
+  | { ok: false; error: 'BUSY_TRY_AGAIN' }
+  | { ok: false; error: 'NOT_CONFIGURED' };
+
+export type GetTemplatesResult =
+  | { ok: true; templates: NetTemplate[] }
+  | { ok: false; error: 'NOT_CONFIGURED' }
+  | { ok: false; error: 'READ_FAILED' };
+
+export type DeleteTemplateResult =
+  | { ok: true }
+  | { ok: false; error: 'NOT_AUTHORIZED' }
+  | { ok: false; error: 'INVALID_INPUT'; field: string; reason: string }
+  | { ok: false; error: 'NOT_FOUND' }
+  | { ok: false; error: 'BUSY_TRY_AGAIN' }
+  | { ok: false; error: 'NOT_CONFIGURED' };
+
+export type GetRepeaterSystemsResult =
+  | { ok: true; systems: RepeaterSystem[] }
+  | { ok: false; error: 'NOT_CONFIGURED' }
+  | { ok: false; error: 'READ_FAILED' };
+
+// ---------------------------------------------------------------------------
 // Server function input / output types.
 // ---------------------------------------------------------------------------
 
 export interface StartSessionInput {
-  requestId: string;
-  date: string; // "YYYY-MM-DD"
-  time: string; // "HH:mm" 24h
-  netType: string;
-  ncoCallsign: string;
-  repeater?: string;
-  purposeNotes?: string;
+  requestId:        string;
+  date:             string;   // "YYYY-MM-DD"
+  time:             string;   // "HH:mm" 24h
+  netType:          string;
+  ncoCallsign:      string;
+  repeater?:        string;
+  purposeNotes?:    string;
+  ncoName?:         string;   // Slice 4
+  ncoLocation?:     string;   // Slice 4
+  repeaterSystem?:  string;   // Slice 4 — SystemName of selected system
 }
 
 export type StartSessionResult =
@@ -233,8 +366,9 @@ export type EndSessionResult =
 //   'Roster'   — populated by Sunday-Sync from the ActivARES member CSV.
 //   'Others'   — non-member callsign cache (visitors, drop-ins, unresolved).
 //   'Settings' — key/value config placeholder; UI deferred to a later slice.
+//   'Templates' / 'Repeaters' — Slice 4 net script feature.
 export type SetupSheetsResult =
-  | { ok: true; created: ('Sessions' | 'Checkins' | 'Roster' | 'Others' | 'Settings')[] }
+  | { ok: true; created: ('Sessions' | 'Checkins' | 'Roster' | 'Others' | 'Settings' | 'Templates' | 'Repeaters')[] }
   | { ok: false; error: 'NOT_CONFIGURED' }
   | { ok: false; error: 'NOT_AUTHORIZED' }
   | { ok: false; error: 'BUSY_TRY_AGAIN' };

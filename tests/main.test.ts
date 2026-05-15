@@ -103,7 +103,7 @@ describe('setupSheets', () => {
     const r = setupSheets();
     expect(r).toEqual({
       ok: true,
-      created: ['Sessions', 'Checkins', 'Roster', 'Others', 'Settings'],
+      created: ['Sessions', 'Checkins', 'Roster', 'Others', 'Settings', 'Templates', 'Repeaters'],
     });
     expect(getMockSheet('Sessions')?.[0]).toEqual(SESSIONS_HEADERS);
     expect(getMockSheet('Checkins')?.[0]).toEqual(CHECKINS_HEADERS);
@@ -161,7 +161,8 @@ describe('setupSheets', () => {
     setupSheets();
     const log = getLogCalls();
     expect(log.length).toBeGreaterThan(0);
-    const msg = String(log[log.length - 1][0]);
+    // Find the created-list summary (not the REMINDER that follows it).
+    const msg = String(log.map(args => String(args[0])).find(m => m.includes('created=')) ?? '');
     expect(msg).toContain('setupSheets');
     expect(msg).toContain('Sessions');
     expect(msg).toContain('Checkins');

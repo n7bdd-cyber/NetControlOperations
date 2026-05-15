@@ -8,242 +8,189 @@
       /* WCAG-AA contrast; 48px tap targets. */
       * { box-sizing: border-box; }
       html, body {
-        margin: 0;
-        padding: 0;
+        margin: 0; padding: 0;
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-        font-size: 18px;
-        color: #111;
-        background: #fff;
+        font-size: 18px; color: #111; background: #fff;
       }
-      main {
-        max-width: 480px;
-        margin: 0 auto;
-        padding: 16px;
-      }
+      main { max-width: 480px; margin: 0 auto; padding: 16px; }
       section { display: none; }
       section.active { display: block; }
       h1 { font-size: 22px; margin: 0 0 12px; }
       h2 { font-size: 18px; margin: 0 0 8px; color: #333; }
-      label {
-        display: block;
-        margin-top: 12px;
-        font-weight: 600;
-      }
-      input, textarea, button {
-        font-size: 18px;
-        font-family: inherit;
-        width: 100%;
-        min-height: 48px;
-        padding: 8px 12px;
-        margin-top: 4px;
-        border: 1px solid #999;
-        border-radius: 6px;
+      label { display: block; margin-top: 12px; font-weight: 600; }
+      input, textarea, button, select {
+        font-size: 18px; font-family: inherit; width: 100%;
+        min-height: 48px; padding: 8px 12px; margin-top: 4px;
+        border: 1px solid #999; border-radius: 6px;
       }
       textarea { min-height: 96px; resize: vertical; }
       button {
-        background: #0b69d3;
-        color: #fff;
-        border: none;
-        font-weight: 600;
-        cursor: pointer;
-        margin-top: 16px;
+        background: #0b69d3; color: #fff; border: none;
+        font-weight: 600; cursor: pointer; margin-top: 16px;
       }
       button.secondary { background: #777; }
       button:disabled { background: #aaa; cursor: not-allowed; }
-      input:focus, textarea:focus, button:focus {
-        outline: 3px solid #ffbf47;
-        outline-offset: 2px;
+      input:focus, textarea:focus, button:focus, select:focus {
+        outline: 3px solid #ffbf47; outline-offset: 2px;
       }
-      .field-error {
-        color: #b00020;
-        font-size: 15px;
-        margin: 4px 0 0;
-        min-height: 18px;
-      }
-      .row-controls {
-        display: flex;
-        gap: 8px;
-      }
+      .field-error { color: #b00020; font-size: 15px; margin: 4px 0 0; min-height: 18px; }
+      .row-controls { display: flex; gap: 8px; }
       .row-controls input { flex: 1; }
       .row-controls button { width: auto; min-width: 96px; margin-top: 4px; }
       .header-strip {
-        background: #f4f6f8;
-        padding: 12px;
-        border-radius: 6px;
-        margin-bottom: 12px;
+        background: #f4f6f8; padding: 12px; border-radius: 6px; margin-bottom: 12px;
       }
       .counters { color: #555; font-size: 16px; }
-      .checkin-list {
-        list-style: none;
-        padding: 0;
-        margin: 12px 0;
-      }
+      .checkin-list { list-style: none; padding: 0; margin: 12px 0; }
       .checkin-list li {
-        padding: 10px 12px;
-        border-bottom: 1px solid #eee;
-        display: grid;
-        grid-template-columns: auto 1fr auto auto;
-        gap: 8px;
-        align-items: center;
+        padding: 10px 12px; border-bottom: 1px solid #eee;
+        display: grid; grid-template-columns: auto 1fr auto auto;
+        gap: 8px; align-items: center;
       }
       .checkin-list li.flash { animation: flash 0.6s; }
-      @keyframes flash {
-        from { background: #fff5cc; }
-        to { background: transparent; }
-      }
-      /* Recognition checkbox */
-      .recog-wrap {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
+      @keyframes flash { from { background: #fff5cc; } to { background: transparent; } }
+      .recog-wrap { display: flex; align-items: center; justify-content: center; }
       .recog-check {
-        width: 24px;
-        height: 24px;
-        min-height: unset;
-        cursor: pointer;
-        accent-color: #0b69d3;
-        margin: 0;
-        padding: 0;
-        border: none;
+        width: 24px; height: 24px; min-height: unset; cursor: pointer;
+        accent-color: #0b69d3; margin: 0; padding: 0; border: none;
       }
-      /* Callsign + name column */
-      .cs-col {
-        font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
-        overflow: hidden;
-      }
+      .cs-col { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; overflow: hidden; }
       .cs-primary { font-size: 18px; }
       .cs-name {
-        font-size: 14px;
-        color: #555;
-        margin-top: 2px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        font-size: 14px; color: #555; margin-top: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
-      /* Name-status pills */
       .name-pill {
-        font-size: 13px;
-        padding: 2px 8px;
-        border-radius: 10px;
+        font-size: 13px; padding: 2px 8px; border-radius: 10px;
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-        font-weight: 600;
-        border: none;
-        cursor: default;
-        display: inline-block;
-        margin-top: 2px;
+        font-weight: 600; border: none; cursor: default; display: inline-block; margin-top: 2px;
       }
-      .name-pill.searching {
-        background: #e0edff;
-        color: #0b4a9f;
-      }
+      .name-pill.searching { background: #e0edff; color: #0b4a9f; }
       .name-pill.check-back {
-        background: #fff3cd;
-        color: #664d03;
-        cursor: pointer;
-        text-decoration: underline;
+        background: #fff3cd; color: #664d03; cursor: pointer; text-decoration: underline;
       }
-      /* Tap count */
-      .tap-count {
-        font-size: 15px;
-        color: #777;
-        white-space: nowrap;
-      }
-      /* Inline name form inside the list item */
+      .tap-count { font-size: 15px; color: #777; white-space: nowrap; }
       .name-form-wrap {
-        grid-column: 1 / -1;
-        display: flex;
-        gap: 6px;
-        align-items: center;
-        padding-top: 6px;
+        grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; padding-top: 6px;
       }
-      .name-form-wrap input {
-        flex: 1;
-        min-height: 40px;
-        font-size: 16px;
-        margin: 0;
-      }
-      .name-form-wrap button {
-        width: auto;
-        min-height: 40px;
-        font-size: 15px;
-        padding: 4px 12px;
-        margin: 0;
-      }
-      .name-form-label {
-        font-size: 14px;
-        color: #333;
-        font-weight: 600;
-        grid-column: 1 / -1;
-      }
-      /* Slice 2: Suffix-Tap candidate list */
-      .candidates-row {
-        margin: 12px 0;
-        padding: 12px;
-        background: #f4f6f8;
-        border-radius: 6px;
-      }
-      .candidates-list {
-        list-style: none;
-        padding: 0;
-        margin: 8px 0;
-      }
+      .name-form-wrap input { flex: 1; min-height: 40px; font-size: 16px; margin: 0; }
+      .name-form-wrap button { width: auto; min-height: 40px; font-size: 15px; padding: 4px 12px; margin: 0; }
+      .name-form-label { font-size: 14px; color: #333; font-weight: 600; grid-column: 1 / -1; }
+      .candidates-row { margin: 12px 0; padding: 12px; background: #f4f6f8; border-radius: 6px; }
+      .candidates-list { list-style: none; padding: 0; margin: 8px 0; }
       .candidates-list li { margin: 6px 0; }
       .candidate {
-        display: block;
-        width: 100%;
-        min-height: 48px;
-        text-align: left;
+        display: block; width: 100%; min-height: 48px; text-align: left;
         font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
-        font-size: 18px;
-        padding: 12px;
+        font-size: 18px; padding: 12px;
       }
       .candidate:focus { outline: 3px solid #0b69d3; outline-offset: 2px; }
       .recent-badge {
-        display: inline-block;
-        margin-left: 8px;
-        padding: 2px 8px;
-        font-size: 14px;
+        display: inline-block; margin-left: 8px; padding: 2px 8px; font-size: 14px;
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-        background: #ffd966;
-        color: #111;
-        border-radius: 10px;
-        font-weight: 600;
+        background: #ffd966; color: #111; border-radius: 10px; font-weight: 600;
       }
       .toast {
-        position: fixed;
-        left: 50%;
-        bottom: 16px;
-        transform: translateX(-50%);
-        background: #222;
-        color: #fff;
-        padding: 12px 16px;
-        border-radius: 6px;
-        max-width: 90%;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+        background: #222; color: #fff; padding: 12px 16px; border-radius: 6px;
+        max-width: 90%; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       }
       .small { font-size: 15px; color: #555; }
-      /* FCC ID timer */
       .fcc-timer {
-        display: inline-block;
-        font-size: 15px;
-        font-weight: 700;
-        padding: 2px 10px;
-        border-radius: 8px;
-        background: #e8f4e8;
-        color: #1a5c1a;
-        cursor: pointer;
-        user-select: none;
-        margin-left: 8px;
-        vertical-align: middle;
+        display: inline-block; font-size: 15px; font-weight: 700;
+        padding: 2px 10px; border-radius: 8px; background: #e8f4e8; color: #1a5c1a;
+        cursor: pointer; user-select: none; margin-left: 8px; vertical-align: middle;
       }
       .fcc-timer.amber { background: #fff3cd; color: #664d03; }
       .fcc-timer.red   { background: #fde8e8; color: #b00020; }
+
+      /* ── Slice 4: Script panel ── */
+      .script-panel-wrap {
+        background: #f0f4ff; border-radius: 8px; padding: 12px; margin-bottom: 12px;
+      }
+      .script-panel-header {
+        display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+      }
+      .back-btn {
+        background: transparent; color: #0b69d3; border: 1px solid #0b69d3;
+        width: auto; min-width: 80px; min-height: 40px; font-size: 16px; margin-top: 0; padding: 4px 12px;
+      }
+      .back-btn:hover { background: #e8f0ff; }
+      .script-section-title { font-size: 16px; font-weight: 600; color: #444; margin: 6px 0 2px; }
+      .script-calltoair { font-size: 20px; line-height: 1.5; margin: 8px 0; white-space: pre-wrap; }
+      .script-notes {
+        font-size: 15px; color: #666; margin: 8px 0; padding: 8px;
+        background: #fff; border-left: 3px solid #aaa; border-radius: 0 4px 4px 0;
+        white-space: pre-wrap;
+      }
+      .script-progress { font-size: 14px; color: #555; margin: 4px 0; }
+
+      /* Hold-to-advance fill bar */
+      .hold-btn { position: relative; overflow: hidden; }
+      .hold-btn::after {
+        content: ''; position: absolute; bottom: 0; left: 0;
+        height: 4px; width: 0%;
+        background: rgba(255,255,255,0.65);
+        transition: width 0s;
+      }
+      .hold-btn.holding::after { width: 100%; transition: width 1.5s linear; }
+      button.btn-amber { background: #b07d00; }
+      button.btn-amber:hover { background: #9a6a00; }
+
+      /* ── Slice 4: Repeater system pickers ── */
+      .repeater-summary { font-size: 14px; color: #555; margin: 4px 0 0; min-height: 16px; }
+      select { background: #fff; }
+
+      /* ── Slice 4: Template editor ── */
+      .ed-template-btn {
+        display: block; width: 100%; text-align: left;
+        background: #f4f6f8; color: #111; border: 1px solid #ddd;
+        margin-top: 6px; font-size: 16px; padding: 10px 12px; min-height: 48px;
+      }
+      .ed-template-btn.selected { background: #dceeff; border-color: #0b69d3; }
+      .default-badge {
+        display: inline-block; background: #e0f4e0; color: #1a5c1a;
+        font-size: 12px; padding: 2px 6px; border-radius: 8px; margin-left: 6px;
+      }
+      .parse-err-pill {
+        display: inline-block; background: #fde8e8; color: #b00020;
+        font-size: 12px; padding: 2px 6px; border-radius: 8px; margin-left: 6px;
+      }
+      .chip-bar {
+        display: flex; flex-wrap: wrap; gap: 4px; padding: 6px;
+        background: #f0f4ff; border-radius: 6px; margin: 6px 0;
+      }
+      .chip {
+        background: #0b69d3; color: #fff; border: none; border-radius: 4px;
+        font-size: 12px; padding: 3px 7px; min-height: 28px; width: auto; margin: 0;
+        cursor: pointer; font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      }
+      .chip:focus { outline: 3px solid #ffbf47; outline-offset: 2px; }
+      .section-row {
+        display: grid; grid-template-columns: 36px 1fr 36px;
+        gap: 6px; align-items: start;
+        padding: 8px 0; border-bottom: 1px solid #eee;
+      }
+      .section-order-controls { display: flex; flex-direction: column; gap: 2px; }
+      .section-move-btn {
+        width: 36px; min-height: 30px; font-size: 14px; padding: 2px;
+        background: #777; margin: 0;
+      }
+      .section-fields { display: flex; flex-direction: column; gap: 4px; }
+      .section-title-input { font-size: 15px; min-height: 38px; padding: 4px 8px; }
+      .section-cta-input, .section-notes-input {
+        font-size: 14px; min-height: 56px; padding: 4px 8px;
+      }
+      .section-del-btn {
+        width: 36px; min-height: 30px; font-size: 16px; padding: 2px;
+        margin: 0; align-self: start; background: #b00020;
+      }
+      #ed-admin-controls { margin-top: 8px; }
     </style>
   </head>
   <body>
     <main>
-      <!-- Screen 1: Start -->
+      <!-- ═══ Screen 1: Start ═══ -->
       <section id="screen-start" class="active" aria-labelledby="start-title">
         <h1 id="start-title">WashCoARES Net Control</h1>
         <h2>Start a new net</h2>
@@ -264,17 +211,65 @@
         <input id="f-nco" type="text" maxlength="18" autocapitalize="characters" autocomplete="off" required />
         <p id="e-nco" class="field-error" role="alert"></p>
 
-        <label for="f-repeater">Repeater (optional)</label>
-        <input id="f-repeater" type="text" maxlength="100" />
+        <label for="f-nco-name">Your name</label>
+        <input id="f-nco-name" type="text" maxlength="100" autocomplete="name" />
+
+        <label for="f-nco-location">Your location</label>
+        <input id="f-nco-location" type="text" maxlength="100" />
+
+        <label for="f-repeater-system">Repeater system</label>
+        <select id="f-repeater-system">
+          <option value="">Loading…</option>
+        </select>
+
+        <div id="repeater-sub-picker" hidden>
+          <label for="f-tonight-repeater">Tonight's repeater</label>
+          <select id="f-tonight-repeater"></select>
+        </div>
+
+        <p id="repeater-system-summary" class="repeater-summary"></p>
+
+        <div id="repeater-other-row" hidden>
+          <label for="f-repeater">Repeater (optional)</label>
+          <input id="f-repeater" type="text" maxlength="100" />
+        </div>
+
+        <label for="f-net-script">Net script</label>
+        <select id="f-net-script">
+          <option value="">No Script</option>
+          <option value="__loading__" disabled>Loading scripts…</option>
+        </select>
 
         <label for="f-notes">Purpose / notes (optional)</label>
         <textarea id="f-notes" maxlength="500"></textarea>
 
         <button id="btn-start" type="button">Start Net</button>
+        <button id="btn-open-editor" class="secondary" type="button">Manage Scripts</button>
       </section>
 
-      <!-- Screen 2: Logging -->
+      <!-- ═══ Screen 1b: Preamble ═══ -->
+      <section id="screen-preamble" aria-labelledby="preamble-title">
+        <h1 id="preamble-title">Net Script — Preamble</h1>
+        <div id="preamble-text" class="script-calltoair"></div>
+        <button id="btn-begin-net" type="button">Begin Net →</button>
+        <button id="btn-preamble-noscript" class="secondary" type="button" style="margin-top:8px;">Skip Script</button>
+      </section>
+
+      <!-- ═══ Screen 2: Logging ═══ -->
       <section id="screen-log" aria-labelledby="log-title">
+
+        <!-- Script panel — shown when activeScript.phase === 'section' -->
+        <div id="script-panel" class="script-panel-wrap" hidden>
+          <div class="script-panel-header">
+            <button id="btn-back-section" class="back-btn" type="button">← Back</button>
+            <span id="section-progress-text" class="script-progress"></span>
+          </div>
+          <div id="section-title-text" class="script-section-title"></div>
+          <div id="section-calltoair-text" class="script-calltoair"></div>
+          <div id="section-notes-text" class="script-notes" hidden></div>
+          <button id="btn-next-section" class="hold-btn" type="button">Click and Hold for Next Section</button>
+        </div>
+
         <div class="header-strip">
           <h1 id="log-title">
             <span id="hdr-nco"></span> &middot; <span id="hdr-type"></span> &middot; <span id="hdr-time"></span>
@@ -291,7 +286,6 @@
         </div>
         <p id="e-callsign" class="field-error" role="alert"></p>
 
-        <!-- Slice 2: Suffix-Tap candidate list -->
         <div id="candidates-row" class="candidates-row" hidden>
           <p id="candidates-prompt" aria-live="polite">Suffix matches:</p>
           <ul id="candidates-list" class="candidates-list"></ul>
@@ -304,124 +298,200 @@
         <button id="btn-end" class="secondary" type="button">End Net</button>
       </section>
 
-      <!-- Screen 3: End confirm + summary -->
+      <!-- ═══ Screen 2b: Credits ═══ -->
+      <section id="screen-credits" aria-labelledby="credits-title">
+        <h1 id="credits-title">Net Script — Credits</h1>
+        <div id="credits-text" class="script-calltoair"></div>
+        <button id="btn-end-net-credits" type="button">End Net</button>
+      </section>
+
+      <!-- ═══ Screen 3: End confirm ═══ -->
       <section id="screen-end" aria-labelledby="end-title">
         <h1 id="end-title">End net?</h1>
         <p><span id="end-type"></span> &middot; <span id="end-time"></span></p>
         <p class="counters">Total check-ins: <span id="end-total">0</span></p>
         <p class="counters">Unique callsigns: <span id="end-unique">0</span></p>
-
         <button id="btn-end-confirm" type="button">Confirm End</button>
         <button id="btn-end-cancel" class="secondary" type="button">Cancel</button>
       </section>
 
+      <!-- ═══ Screen 4: Summary ═══ -->
       <section id="screen-summary" aria-labelledby="summary-title">
         <h1 id="summary-title">Net ended</h1>
         <p><span id="sum-total">0</span> check-ins logged.</p>
         <p><span id="sum-unique">0</span> unique callsigns.</p>
         <p><span id="sum-hours">0</span> hours total (flat 0.5/callsign).</p>
-
         <a id="btn-open-sheet" href="#" target="_blank" rel="noopener"><button type="button">Open Sheet</button></a>
         <button id="btn-new-net" class="secondary" type="button">Start new net</button>
+      </section>
+
+      <!-- ═══ Screen 5: Template editor ═══ -->
+      <section id="screen-editor" aria-labelledby="editor-title">
+        <button id="btn-editor-close" class="secondary" type="button">← Back to Start</button>
+        <h1 id="editor-title">Net Scripts</h1>
+
+        <!-- Template list view -->
+        <div id="ed-list">
+          <div id="ed-admin-header" hidden>
+            <button id="btn-new-script" type="button">+ New Script</button>
+          </div>
+          <div id="ed-list-items"></div>
+          <p id="ed-no-templates" class="small" hidden>No scripts configured. Ask the trustee to run setupSheets first.</p>
+          <p id="ed-list-loading" class="small">Loading scripts…</p>
+        </div>
+
+        <!-- Edit form view (replaces list on mobile) -->
+        <div id="ed-form" hidden>
+          <button id="btn-form-back" class="secondary" type="button" style="margin-bottom:8px;">← Back</button>
+
+          <label for="ed-name">Script name</label>
+          <input id="ed-name" type="text" maxlength="100" placeholder="Script name" />
+
+          <label>Preamble</label>
+          <div id="ed-preamble-chips" class="chip-bar"></div>
+          <textarea id="ed-preamble" maxlength="5000" placeholder="Preamble text — use {{variable}} placeholders"></textarea>
+
+          <label>Sections</label>
+          <div id="ed-sections-container"></div>
+          <div id="ed-add-section-wrap" hidden>
+            <button id="btn-add-section" class="secondary" type="button" style="margin-top:8px;">+ Add Section</button>
+          </div>
+
+          <label>Credits</label>
+          <div id="ed-credits-chips" class="chip-bar"></div>
+          <textarea id="ed-credits" maxlength="2000" placeholder="Closing credits text — use {{variable}} placeholders"></textarea>
+
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:14px;">
+            <input type="checkbox" id="ed-is-default"
+                   style="width:24px;height:24px;min-height:unset;margin:0;padding:0;border:none;cursor:pointer;" />
+            <span style="font-weight:600;">Set as default</span>
+          </label>
+
+          <p id="ed-attribution" class="small" style="margin-top:8px;"></p>
+          <p id="ed-save-status" class="small"></p>
+
+          <div id="ed-admin-controls" hidden>
+            <button id="btn-save-template" type="button">Save Script</button>
+            <button id="btn-delete-template" class="hold-btn secondary" type="button">Hold to Delete</button>
+          </div>
+        </div>
       </section>
     </main>
 
     <div id="toast" class="toast" role="alert" hidden></div>
 
     <script>
-      // -----------------------------------------------------------------
-      // uuid4 polyfill (handles older browsers without crypto.randomUUID).
-      // -----------------------------------------------------------------
+      // ─────────────────────────────────────────────────────────────────────
+      // uuid4 polyfill
+      // ─────────────────────────────────────────────────────────────────────
       function uuid4() {
         if (typeof crypto !== 'undefined') {
-          if (typeof crypto.randomUUID === 'function') {
-            return crypto.randomUUID();
-          }
+          if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
           if (typeof crypto.getRandomValues === 'function') {
             var b = crypto.getRandomValues(new Uint8Array(16));
             b[6] = (b[6] & 0x0f) | 0x40;
             b[8] = (b[8] & 0x3f) | 0x80;
             var h = [];
             for (var i = 0; i < 16; i++) h.push(b[i].toString(16).padStart(2, '0'));
-            return h.slice(0, 4).join('') + '-' + h.slice(4, 6).join('') + '-' +
-                   h.slice(6, 8).join('') + '-' + h.slice(8, 10).join('') + '-' +
-                   h.slice(10, 16).join('');
+            return h.slice(0,4).join('') + '-' + h.slice(4,6).join('') + '-' +
+                   h.slice(6,8).join('') + '-' + h.slice(8,10).join('') + '-' + h.slice(10,16).join('');
           }
         }
-        if (typeof console !== 'undefined' && console.warn) {
-          console.warn('uuid4: crypto unavailable; using Math.random (NOT cryptographically secure)');
-        }
-        var rh = function (n) {
-          var s = '';
-          for (var i = 0; i < n; i++) s += Math.floor(Math.random() * 16).toString(16);
-          return s;
-        };
-        return rh(8) + '-' + rh(4) + '-4' + rh(3) + '-' +
-               (8 + Math.floor(Math.random() * 4)).toString(16) + rh(3) + '-' + rh(12);
+        var rh = function(n) { var s=''; for (var i=0;i<n;i++) s+=Math.floor(Math.random()*16).toString(16); return s; };
+        return rh(8)+'-'+rh(4)+'-4'+rh(3)+'-'+(8+Math.floor(Math.random()*4)).toString(16)+rh(3)+'-'+rh(12);
       }
 
-      // -----------------------------------------------------------------
-      // Client-side validators (mirror server regexes in validators.ts).
-      // -----------------------------------------------------------------
-      var CALLSIGN_RE = /^(?:[A-Z]{1,3}[0-9][A-Z]{0,2}\/)?[A-Z]{1,2}[0-9][A-Z]{1,3}(?:\/[A-Z0-9]{1,5})?$/;
+      // ─────────────────────────────────────────────────────────────────────
+      // Client-side validators
+      // ─────────────────────────────────────────────────────────────────────
+      var CALLSIGN_RE  = /^(?:[A-Z]{1,3}[0-9][A-Z]{0,2}\/)?[A-Z]{1,2}[0-9][A-Z]{1,3}(?:\/[A-Z0-9]{1,5})?$/;
       var SUFFIX_ONLY_RE = /^[A-Z]{1,3}$/;
-      var DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
-      var TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+      var DATE_RE      = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+      var TIME_RE      = /^([01]\d|2[0-3]):[0-5]\d$/;
       var CSV_INJECT_RE = /^[=+\-@]/;
 
-      var LOADING_ROSTER_MSG = 'Loading roster — try again in a moment.';
+      var LOADING_ROSTER_MSG   = 'Loading roster — try again in a moment.';
       var ROSTER_UNAVAILABLE_MSG = 'Roster unavailable — type the full callsign (e.g. W7ABC).';
-      var ROSTER_EMPTY_MSG = 'Roster is empty — type the full callsign.';
+      var ROSTER_EMPTY_MSG     = 'Roster is empty — type the full callsign.';
       var MAX_CANDIDATES = 10;
-      var MAX_NAME_LEN = 64;
+      var MAX_NAME_LEN   = 64;
 
-      function validCallsign(s) { return typeof s === 'string' && s.length <= 18 && CALLSIGN_RE.test(s); }
-      function isLikelySuffixOnly(s) { return typeof s === 'string' && SUFFIX_ONLY_RE.test(s); }
-      function validDate(s) { return typeof s === 'string' && DATE_RE.test(s); }
-      function validTime(s) { return typeof s === 'string' && TIME_RE.test(s); }
+      function validCallsign(s) { return typeof s==='string' && s.length<=18 && CALLSIGN_RE.test(s); }
+      function isLikelySuffixOnly(s) { return typeof s==='string' && SUFFIX_ONLY_RE.test(s); }
+      function validDate(s) { return typeof s==='string' && DATE_RE.test(s); }
+      function validTime(s) { return typeof s==='string' && TIME_RE.test(s); }
 
-      // -----------------------------------------------------------------
-      // In-memory client state.
-      // -----------------------------------------------------------------
+      // ─────────────────────────────────────────────────────────────────────
+      // Client-side state
+      // ─────────────────────────────────────────────────────────────────────
       var NetControl = {
         sessionId: null,
         netType: '', ncoCallsign: '', netTime: '',
+        ncoName: '', ncoLocation: '',
         // callsign → { checkinId, tapCount, name, resolveAsync, nameSearchFailed }
         checkins: new Map(),
-        history: [],          // ordered list of callsigns newest-first
-        inFlightStart: null,  // { requestId, input }
-        inFlightCheckin: null,// { eventId, callsign }
-        roster: [],           // RosterEntry[] populated by getRosterSnapshot
-        rosterLoaded: false,
-        rosterLoadError: false,
-        // null | { callsign, checkinId } — which list item has the manual-name form open
+        history: [],
+        inFlightStart: null,
+        inFlightCheckin: null,
+        roster: [],
+        rosterLoaded: false, rosterLoadError: false,
         manualNameForm: null,
+        // Slice 4 — persisted across sessions on same page load:
+        templates: [],          // NetTemplate[]
+        repeaterSystems: [],    // RepeaterSystem[]
+        isAdmin: false,
+        // Slice 4 — reset on new session:
+        activeScript: null,     // see buildActiveScript()
+        repeaterSystem: null,   // selected RepeaterSystem | null
+        tonightRepeater: null,  // selected RepeaterEntry | null
       };
 
-      // -----------------------------------------------------------------
-      // UI helpers.
-      // -----------------------------------------------------------------
+      // Separate editor state (not tied to session lifecycle).
+      var EditorState = {
+        selectedId: null,
+        isNewTemplate: false,
+        sections: [],           // mutable copy for current edit
+      };
+
+      // Chip variables for the template editor chip bars.
+      var SCRIPT_CHIP_VARS = [
+        '{{date}}','{{ncoCallsign}}','{{ncoName}}','{{ncoLocation}}','{{netType}}','{{netName}}',
+        '{{frequency}}','{{plTone}}','{{repeaterName}}','{{repeaterCredit}}',
+        '{{primaryName}}','{{primaryFrequency}}','{{primaryPlTone}}','{{primaryDescription}}',
+        '{{alternateName}}','{{alternateFrequency}}','{{alternatePlTone}}',
+        '{{alternateDescription}}','{{alternateNames}}',
+        '{{linkedNames}}','{{linkedFull}}','{{linkedCount}}',
+        '{{echolinkNode}}','{{links}}','{{systemName}}',
+      ];
+
+      // ─────────────────────────────────────────────────────────────────────
+      // UI helpers
+      // ─────────────────────────────────────────────────────────────────────
       function $(id) { return document.getElementById(id); }
+
+      var ALL_SCREENS = [
+        'screen-start','screen-preamble','screen-log','screen-credits',
+        'screen-end','screen-summary','screen-editor',
+      ];
       function showScreen(id) {
-        ['screen-start','screen-log','screen-end','screen-summary'].forEach(function (sid) {
+        ALL_SCREENS.forEach(function(sid) {
           $(sid).classList.toggle('active', sid === id);
         });
       }
+
       function toast(message) {
         var t = $('toast');
         t.textContent = message;
         t.hidden = false;
-        setTimeout(function () { t.hidden = true; }, 3000);
+        setTimeout(function() { t.hidden = true; }, 3000);
       }
-      function setFieldError(errId, text) {
-        $(errId).textContent = text || '';
-      }
+      function setFieldError(errId, text) { $(errId).textContent = text || ''; }
       function clearAllStartErrors() {
-        ['e-date','e-time','e-net-type','e-nco'].forEach(function (id) { $(id).textContent = ''; });
+        ['e-date','e-time','e-net-type','e-nco'].forEach(function(id) { $(id).textContent = ''; });
       }
 
       function renderHeader() {
-        $('hdr-nco').textContent = NetControl.ncoCallsign;
+        $('hdr-nco').textContent  = NetControl.ncoCallsign;
         $('hdr-type').textContent = NetControl.netType;
         $('hdr-time').textContent = NetControl.netTime;
         $('end-type').textContent = NetControl.netType;
@@ -429,59 +499,85 @@
       }
       function renderCounters() {
         var total = 0;
-        NetControl.checkins.forEach(function (v) { total += v.tapCount; });
+        NetControl.checkins.forEach(function(v) { total += v.tapCount; });
         $('cnt-total').textContent = total;
         $('cnt-unique').textContent = NetControl.checkins.size;
-        $('end-total').textContent = total;
+        $('end-total').textContent  = total;
         $('end-unique').textContent = NetControl.checkins.size;
       }
 
-      // -----------------------------------------------------------------
-      // Recognition checkbox — state stored in sessionStorage.
-      // Key: sessionId + ':' + checkinId (stable across renders).
-      // -----------------------------------------------------------------
-      function recogKey(checkinId) {
-        return (NetControl.sessionId || '') + ':' + checkinId;
-      }
+      // ─────────────────────────────────────────────────────────────────────
+      // Recognition checkbox state — sessionStorage
+      // ─────────────────────────────────────────────────────────────────────
+      function recogKey(checkinId) { return (NetControl.sessionId || '') + ':' + checkinId; }
       function getRecog(checkinId) {
-        try { return sessionStorage.getItem(recogKey(checkinId)) === '1'; } catch (_) { return false; }
+        try { return sessionStorage.getItem(recogKey(checkinId)) === '1'; } catch(_) { return false; }
       }
       function setRecog(checkinId, val) {
-        try { sessionStorage.setItem(recogKey(checkinId), val ? '1' : '0'); } catch (_) {}
+        try { sessionStorage.setItem(recogKey(checkinId), val ? '1' : '0'); } catch(_) {}
       }
 
-      // -----------------------------------------------------------------
-      // Render checkin list.
-      // -----------------------------------------------------------------
+      // Purge stale keys from prior sessions (called at session start).
+      function purgeStaleRecogKeys() {
+        if (!NetControl.sessionId) return;
+        try {
+          var toRemove = [];
+          for (var k = 0; k < sessionStorage.length; k++) {
+            var key = sessionStorage.key(k);
+            if (!key) continue;
+            var colon = key.indexOf(':');
+            if (colon < 0) continue;
+            if (key.slice(0, colon) !== NetControl.sessionId) toRemove.push(key);
+          }
+          toRemove.forEach(function(k) { sessionStorage.removeItem(k); });
+        } catch(_) {}
+      }
+
+      // True when any check-in in the current session is not yet recognized.
+      function hasUnrecognizedCheckins() {
+        if (!NetControl.sessionId) return false;
+        try {
+          var prefix = NetControl.sessionId + ':';
+          for (var k = 0; k < sessionStorage.length; k++) {
+            var key = sessionStorage.key(k);
+            if (key && key.startsWith(prefix) && sessionStorage.getItem(key) === '0') return true;
+          }
+        } catch(_) {}
+        return false;
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Check-in list render
+      // ─────────────────────────────────────────────────────────────────────
       function renderList(flashCallsign) {
         var ul = $('checkin-list');
         ul.textContent = '';
-        var shown = NetControl.history.slice(0, 10);
-        shown.forEach(function (cs) {
+        NetControl.history.slice(0, 10).forEach(function(cs) {
           var entry = NetControl.checkins.get(cs);
           if (!entry) return;
           var li = document.createElement('li');
           if (cs === flashCallsign) li.className = 'flash';
 
-          // Column 1: recognition checkbox.
+          // Col 1: recognition checkbox.
           var recogWrap = document.createElement('div');
           recogWrap.className = 'recog-wrap';
           var chk = document.createElement('input');
-          chk.type = 'checkbox';
-          chk.className = 'recog-check';
+          chk.type = 'checkbox'; chk.className = 'recog-check';
           chk.checked = getRecog(entry.checkinId);
           chk.title = 'Recognized';
           chk.setAttribute('aria-label', 'Recognized ' + cs);
           (function(cid) {
-            chk.addEventListener('change', function () { setRecog(cid, chk.checked); });
+            chk.addEventListener('change', function() {
+              setRecog(cid, chk.checked);
+              updateNextSectionAmber();
+            });
           })(entry.checkinId);
           recogWrap.appendChild(chk);
           li.appendChild(recogWrap);
 
-          // Column 2: callsign + name/pill.
+          // Col 2: callsign + name/pill.
           var csCol = document.createElement('div');
           csCol.className = 'cs-col';
-
           var csSpan = document.createElement('div');
           csSpan.className = 'cs-primary';
           csSpan.textContent = cs;
@@ -507,7 +603,7 @@
               cbBtn.textContent = 'Check back';
               cbBtn.type = 'button';
               (function(callsignCopy, checkinIdCopy) {
-                cbBtn.addEventListener('click', function () {
+                cbBtn.addEventListener('click', function() {
                   NetControl.manualNameForm = { callsign: callsignCopy, checkinId: checkinIdCopy };
                   renderList(null);
                 });
@@ -517,13 +613,13 @@
           }
           li.appendChild(csCol);
 
-          // Column 3: tap count.
+          // Col 3: tap count.
           var tapSpan = document.createElement('span');
           tapSpan.className = 'tap-count';
           tapSpan.textContent = '\xd7' + entry.tapCount;
           li.appendChild(tapSpan);
 
-          // Manual name form (spans all columns when open).
+          // Manual name form.
           if (isManualFormOpen) {
             var labelDiv = document.createElement('div');
             labelDiv.className = 'name-form-label';
@@ -532,41 +628,26 @@
 
             var formWrap = document.createElement('div');
             formWrap.className = 'name-form-wrap';
-
             var nameInput = document.createElement('input');
-            nameInput.type = 'text';
-            nameInput.maxLength = MAX_NAME_LEN;
+            nameInput.type = 'text'; nameInput.maxLength = MAX_NAME_LEN;
             nameInput.placeholder = 'e.g. Smith, John';
             formWrap.appendChild(nameInput);
 
             var saveBtn = document.createElement('button');
-            saveBtn.type = 'button';
-            saveBtn.textContent = 'Save';
+            saveBtn.type = 'button'; saveBtn.textContent = 'Save';
             (function(callsignCopy, checkinIdCopy, entryRef, inputRef) {
-              saveBtn.addEventListener('click', function () {
+              saveBtn.addEventListener('click', function() {
                 var typed = inputRef.value.trim();
                 if (!typed) return;
-                if (typed.length > MAX_NAME_LEN) {
-                  toast('Name too long (max ' + MAX_NAME_LEN + ' chars).');
-                  return;
-                }
-                if (CSV_INJECT_RE.test(typed)) {
-                  toast('Name cannot start with = + - @');
-                  return;
-                }
-                // Optimistic update.
-                entryRef.name = typed;
-                entryRef.nameSearchFailed = false;
-                NetControl.manualNameForm = null;
-                renderList(null);
-                // Persist to server.
+                if (typed.length > MAX_NAME_LEN) { toast('Name too long (max ' + MAX_NAME_LEN + ' chars).'); return; }
+                if (CSV_INJECT_RE.test(typed)) { toast('Name cannot start with = + - @'); return; }
+                entryRef.name = typed; entryRef.nameSearchFailed = false;
+                NetControl.manualNameForm = null; renderList(null);
                 google.script.run
-                  .withSuccessHandler(function () { /* no-op — already updated */ })
-                  .withFailureHandler(function () {
+                  .withSuccessHandler(function() {})
+                  .withFailureHandler(function() {
                     toast('Could not save name — try again.');
-                    entryRef.name = null;
-                    entryRef.nameSearchFailed = true;
-                    renderList(null);
+                    entryRef.name = null; entryRef.nameSearchFailed = true; renderList(null);
                   })
                   .setManualName(callsignCopy, checkinIdCopy, typed);
               });
@@ -574,73 +655,57 @@
             formWrap.appendChild(saveBtn);
 
             var cancelBtn = document.createElement('button');
-            cancelBtn.type = 'button';
-            cancelBtn.className = 'secondary';
-            cancelBtn.textContent = 'Cancel';
-            cancelBtn.style.marginLeft = '4px';
-            cancelBtn.addEventListener('click', function () {
-              NetControl.manualNameForm = null;
-              renderList(null);
+            cancelBtn.type = 'button'; cancelBtn.className = 'secondary';
+            cancelBtn.textContent = 'Cancel'; cancelBtn.style.marginLeft = '4px';
+            cancelBtn.addEventListener('click', function() {
+              NetControl.manualNameForm = null; renderList(null);
             });
             formWrap.appendChild(cancelBtn);
-
             li.appendChild(formWrap);
-            // Focus the input after DOM insertion (next tick).
-            setTimeout(function () { nameInput.focus(); }, 0);
+            setTimeout(function() { nameInput.focus(); }, 0);
           }
 
           ul.appendChild(li);
         });
       }
 
-      // -----------------------------------------------------------------
-      // Async name resolution — fired when recordCheckin returns resolveAsync=true.
-      // -----------------------------------------------------------------
+      // ─────────────────────────────────────────────────────────────────────
+      // Async name resolution
+      // ─────────────────────────────────────────────────────────────────────
       function startNameResolution(callsign, checkinId) {
         google.script.run
-          .withSuccessHandler(function (result) {
+          .withSuccessHandler(function(result) {
             var entry = NetControl.checkins.get(callsign);
-            if (!entry || entry.checkinId !== checkinId) return; // stale
+            if (!entry || entry.checkinId !== checkinId) return;
             if (result && result.name) {
-              entry.name = result.name;
-              entry.resolveAsync = false;
-              entry.nameSearchFailed = false;
+              entry.name = result.name; entry.resolveAsync = false; entry.nameSearchFailed = false;
             } else {
               entry.nameSearchFailed = true;
             }
             renderList(null);
           })
-          .withFailureHandler(function () {
+          .withFailureHandler(function() {
             var entry = NetControl.checkins.get(callsign);
             if (!entry || entry.checkinId !== checkinId) return;
-            entry.nameSearchFailed = true;
-            renderList(null);
+            entry.nameSearchFailed = true; renderList(null);
           })
           .resolveName(callsign, checkinId);
       }
 
-      // -----------------------------------------------------------------
-      // Slice 2 — Suffix-Tap helpers.
-      // -----------------------------------------------------------------
+      // ─────────────────────────────────────────────────────────────────────
+      // Suffix-Tap helpers (Slice 2)
+      // ─────────────────────────────────────────────────────────────────────
       function findCandidatesBySuffix(suffix) {
         if (!suffix) return [];
         var rosterByCallsign = new Map();
-        NetControl.roster.forEach(function (e) { rosterByCallsign.set(e.callsign, e); });
+        NetControl.roster.forEach(function(e) { rosterByCallsign.set(e.callsign, e); });
 
-        var band1 = [];
-        var band1Set = new Set();
+        var band1 = [], band1Set = new Set();
         for (var i = 0; i < NetControl.history.length; i++) {
           var cs = NetControl.history[i];
-          if (!NetControl.checkins.has(cs)) continue;
-          if (!cs.endsWith(suffix)) continue;
-          if (band1Set.has(cs)) continue;
-          var rosterRow = rosterByCallsign.get(cs);
-          band1.push({
-            callsign: cs,
-            name: rosterRow ? rosterRow.name : '',
-            licenseClass: rosterRow ? rosterRow.licenseClass : '',
-            recent: true,
-          });
+          if (!NetControl.checkins.has(cs) || !cs.endsWith(suffix) || band1Set.has(cs)) continue;
+          var rr = rosterByCallsign.get(cs);
+          band1.push({ callsign: cs, name: rr ? rr.name : '', licenseClass: rr ? rr.licenseClass : '', recent: true });
           band1Set.add(cs);
           if (band1.length >= MAX_CANDIDATES) break;
         }
@@ -648,47 +713,34 @@
         var band2 = [];
         for (var j = 0; j < NetControl.roster.length && band1.length + band2.length < MAX_CANDIDATES; j++) {
           var r = NetControl.roster[j];
-          if (band1Set.has(r.callsign)) continue;
-          if (!r.callsign.endsWith(suffix)) continue;
-          band2.push({
-            callsign: r.callsign,
-            name: r.name,
-            licenseClass: r.licenseClass,
-            recent: false,
-          });
+          if (!band1Set.has(r.callsign) && r.callsign.endsWith(suffix)) {
+            band2.push({ callsign: r.callsign, name: r.name, licenseClass: r.licenseClass, recent: false });
+          }
         }
-
         return band1.concat(band2);
       }
 
       function onCandidatesKeydown(e) {
-        if (e.key !== 'Escape') return;
-        if ($('candidates-row').hidden) return;
-        e.preventDefault();
-        dismissCandidates();
+        if (e.key !== 'Escape' || $('candidates-row').hidden) return;
+        e.preventDefault(); dismissCandidates();
       }
 
       function renderCandidates(candidates) {
-        var prompt = $('candidates-prompt');
-        prompt.textContent = 'Suffix matches: ' + candidates.length + ' found.';
+        $('candidates-prompt').textContent = 'Suffix matches: ' + candidates.length + ' found.';
         var ul = $('candidates-list');
         ul.textContent = '';
-        candidates.forEach(function (c) {
+        candidates.forEach(function(c) {
           var li = document.createElement('li');
           var btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'candidate';
+          btn.type = 'button'; btn.className = 'candidate';
           btn.dataset.callsign = c.callsign;
           btn.textContent = c.name ? c.callsign + ' — ' + c.name : c.callsign;
           if (c.recent) {
             var chip = document.createElement('span');
-            chip.className = 'recent-badge';
-            chip.textContent = 'this net';
-            btn.appendChild(document.createTextNode(' '));
-            btn.appendChild(chip);
+            chip.className = 'recent-badge'; chip.textContent = 'this net';
+            btn.appendChild(document.createTextNode(' ')); btn.appendChild(chip);
           }
-          li.appendChild(btn);
-          ul.appendChild(li);
+          li.appendChild(btn); ul.appendChild(li);
         });
         $('candidates-row').hidden = false;
         $('btn-log').disabled = true;
@@ -701,8 +753,7 @@
       function dismissCandidates() {
         $('candidates-row').hidden = true;
         $('btn-log').disabled = false;
-        var btns = document.querySelectorAll('#candidates-list .candidate');
-        btns.forEach(function (b) { b.disabled = false; });
+        document.querySelectorAll('#candidates-list .candidate').forEach(function(b) { b.disabled = false; });
         $('f-callsign').disabled = false;
         NetControl.inFlightCheckin = null;
         document.removeEventListener('keydown', onCandidatesKeydown);
@@ -711,30 +762,21 @@
 
       function resetSessionLocalState() {
         NetControl.sessionId = null;
+        NetControl.activeScript = null;
         NetControl.checkins = new Map();
         NetControl.history = [];
         NetControl.inFlightCheckin = null;
-        NetControl.roster = [];
-        NetControl.rosterLoaded = false;
-        NetControl.rosterLoadError = false;
+        NetControl.roster = []; NetControl.rosterLoaded = false; NetControl.rosterLoadError = false;
         NetControl.manualNameForm = null;
-        renderCounters();
-        renderList(null);
-        stopFccTimer();
+        renderCounters(); renderList(null); stopFccTimer();
+        var panel = $('script-panel');
+        if (panel) panel.hidden = true;
       }
 
-      // Shared bookkeeping after a successful recordCheckin result.
       function applyCheckinResult(callsign, result) {
         var existing = NetControl.checkins.get(callsign);
-        var entry = existing || {
-          checkinId: result.checkinId,
-          tapCount: 0,
-          name: null,
-          resolveAsync: false,
-          nameSearchFailed: false,
-        };
+        var entry = existing || { checkinId: result.checkinId, tapCount: 0, name: null, resolveAsync: false, nameSearchFailed: false };
         entry.tapCount = result.tapCount;
-        // On first event: store resolved name (if any) and async flag.
         if (result.firstEventForCallsignInSession) {
           entry.checkinId = result.checkinId;
           entry.name = result.resolvedName || null;
@@ -742,10 +784,7 @@
           entry.nameSearchFailed = false;
         }
         NetControl.checkins.set(callsign, entry);
-        NetControl.history = [callsign].concat(
-          NetControl.history.filter(function (c) { return c !== callsign; })
-        );
-        // Fire async FCC lookup if needed.
+        NetControl.history = [callsign].concat(NetControl.history.filter(function(c) { return c !== callsign; }));
         if (result.firstEventForCallsignInSession && result.resolveAsync) {
           startNameResolution(callsign, result.checkinId);
         }
@@ -756,113 +795,80 @@
         if (!localEventId) return;
 
         var btns = document.querySelectorAll('#candidates-list .candidate');
-        btns.forEach(function (b) { b.disabled = true; });
+        btns.forEach(function(b) { b.disabled = true; });
         $('f-callsign').disabled = true;
         try {
           var result = await callWithRetry('recordCheckin', {
-            sessionId: NetControl.sessionId,
-            callsign: callsign,
-            eventId: localEventId,
+            sessionId: NetControl.sessionId, callsign: callsign, eventId: localEventId,
           });
-          // Cancel-token check.
           if (!NetControl.inFlightCheckin || NetControl.inFlightCheckin.eventId !== localEventId) {
-            btns.forEach(function (b) { b.disabled = false; });
-            return;
+            btns.forEach(function(b) { b.disabled = false; }); return;
           }
           if (!result || !result.ok) {
             if (result && (result.error === 'SESSION_NOT_FOUND' || result.error === 'SESSION_CLOSED')) {
               toast(result.error === 'SESSION_CLOSED' ? 'Net already ended.' : 'Session expired — start a new net.');
-              dismissCandidates();
-              resetSessionLocalState();
-              $('f-callsign').disabled = false;
-              showScreen('screen-start');
-              return;
+              dismissCandidates(); resetSessionLocalState(); showScreen('screen-start');
             } else if (result && result.error === 'INVALID_CALLSIGN') {
               setFieldError('e-callsign', 'Invalid callsign.');
-            } else if (result && result.error === 'BUSY_TRY_AGAIN') {
-              toast('Try again — system busy.');
             } else {
               toast('Could not log check-in.');
             }
-            btns.forEach(function (b) { b.disabled = false; });
-            $('f-callsign').disabled = false;
-            return;
+            btns.forEach(function(b) { b.disabled = false; }); $('f-callsign').disabled = false; return;
           }
           applyCheckinResult(callsign, result);
           NetControl.inFlightCheckin = null;
-          renderCounters();
-          renderList(result.deduped ? null : callsign);
-          $('candidates-row').hidden = true;
-          $('btn-log').disabled = false;
+          renderCounters(); renderList(result.deduped ? null : callsign);
+          updateNextSectionAmber();
+          $('candidates-row').hidden = true; $('btn-log').disabled = false;
           $('f-callsign').disabled = false;
           document.removeEventListener('keydown', onCandidatesKeydown);
-          $('f-callsign').value = '';
-          $('f-callsign').focus();
-        } catch (e) {
+          $('f-callsign').value = ''; $('f-callsign').focus();
+        } catch(e) {
           if (!NetControl.inFlightCheckin || NetControl.inFlightCheckin.eventId !== localEventId) {
-            btns.forEach(function (b) { b.disabled = false; });
-            return;
+            btns.forEach(function(b) { b.disabled = false; }); return;
           }
           toast('Network error — try again.');
-          btns.forEach(function (b) { b.disabled = false; });
-          $('f-callsign').disabled = false;
+          btns.forEach(function(b) { b.disabled = false; }); $('f-callsign').disabled = false;
         }
       }
 
-      // -----------------------------------------------------------------
-      // FCC 10-minute ID timer.
-      // -----------------------------------------------------------------
+      // ─────────────────────────────────────────────────────────────────────
+      // FCC 10-minute ID timer
+      // ─────────────────────────────────────────────────────────────────────
       var fccTimerInterval = null;
-      var fccTimerSecondsLeft = 600; // 10 minutes
+      var fccTimerSecondsLeft = 600;
 
       function updateFccTimerDisplay() {
-        var el = $('fcc-timer');
-        if (!el) return;
+        var el = $('fcc-timer'); if (!el) return;
         var m = Math.floor(fccTimerSecondsLeft / 60);
         var s = fccTimerSecondsLeft % 60;
         el.textContent = m + ':' + String(s).padStart(2, '0');
         el.classList.remove('amber', 'red');
-        if (fccTimerSecondsLeft <= 0) {
-          el.classList.add('red');
-        } else if (fccTimerSecondsLeft <= 120) {
-          el.classList.add('amber');
-        }
+        if (fccTimerSecondsLeft <= 0) el.classList.add('red');
+        else if (fccTimerSecondsLeft <= 120) el.classList.add('amber');
       }
-
       function startFccTimer() {
-        stopFccTimer();
-        fccTimerSecondsLeft = 600;
-        updateFccTimerDisplay();
-        fccTimerInterval = setInterval(function () {
+        stopFccTimer(); fccTimerSecondsLeft = 600; updateFccTimerDisplay();
+        fccTimerInterval = setInterval(function() {
           if (fccTimerSecondsLeft > 0) fccTimerSecondsLeft--;
           updateFccTimerDisplay();
         }, 1000);
       }
-
       function stopFccTimer() {
-        if (fccTimerInterval !== null) {
-          clearInterval(fccTimerInterval);
-          fccTimerInterval = null;
-        }
+        if (fccTimerInterval !== null) { clearInterval(fccTimerInterval); fccTimerInterval = null; }
         fccTimerSecondsLeft = 600;
       }
+      function resetFccTimer() { fccTimerSecondsLeft = 600; updateFccTimerDisplay(); }
 
-      function resetFccTimer() {
-        fccTimerSecondsLeft = 600;
-        updateFccTimerDisplay();
-      }
-
-      // -----------------------------------------------------------------
-      // Server call helpers.
-      // -----------------------------------------------------------------
+      // ─────────────────────────────────────────────────────────────────────
+      // Server call helpers
+      // ─────────────────────────────────────────────────────────────────────
       function callServer(method, payload) {
-        return new Promise(function (resolve, reject) {
-          google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler(reject)[method](payload);
+        return new Promise(function(resolve, reject) {
+          google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[method](payload);
         });
       }
-      function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+      function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
       async function callWithRetry(method, payload) {
         var networkRetries = 1;
@@ -872,35 +878,284 @@
             var lastResult = null;
             for (var i = 0; i < backoffs.length + 1; i++) {
               lastResult = await callServer(method, payload);
-              if (!(lastResult && lastResult.ok === false && lastResult.error === 'BUSY_TRY_AGAIN')) {
-                return lastResult;
-              }
+              if (!(lastResult && lastResult.ok === false && lastResult.error === 'BUSY_TRY_AGAIN')) return lastResult;
               if (i < backoffs.length) await sleep(backoffs[i]);
             }
             return lastResult;
-          } catch (err) {
+          } catch(err) {
             if (networkRetries > 0) {
-              networkRetries -= 1;
-              toast('Network error — retrying.');
-              await sleep(500);
-              continue;
+              networkRetries--; toast('Network error — retrying.'); await sleep(500); continue;
             }
             throw err;
           }
         }
       }
 
-      // -----------------------------------------------------------------
-      // Screen 1: Start.
-      // -----------------------------------------------------------------
+      // ─────────────────────────────────────────────────────────────────────
+      // Slice 4 — Variable substitution
+      // ─────────────────────────────────────────────────────────────────────
+      function substituteVariables(text, vars) {
+        return text.replace(/\{\{(\w+)\}\}/g, function(_, key) {
+          return Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : '{{' + key + '}}';
+        });
+      }
+
+      function formatScriptDate(isoDate) {
+        // isoDate is "YYYY-MM-DD"
+        var d = new Date(isoDate + 'T00:00:00');
+        var days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        var months = ['January','February','March','April','May','June','July','August',
+                      'September','October','November','December'];
+        return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+      }
+
+      function buildVars(date, ncoCallsign, ncoName, ncoLocation, netType, templateName, system, tonightRepeater) {
+        var v = {};
+        v['date']        = formatScriptDate(date);
+        v['ncoCallsign'] = ncoCallsign;
+        v['ncoName']     = ncoName || '';
+        v['ncoLocation'] = ncoLocation || '';
+        v['netType']     = netType;
+        v['netName']     = templateName;
+
+        // Tonight's repeater vars (resolve to '' when None/Other or linked-only)
+        if (tonightRepeater) {
+          v['frequency']     = tonightRepeater.frequency;
+          v['plTone']        = tonightRepeater.plTone;
+          v['repeaterName']  = tonightRepeater.repeaterName;
+          v['repeaterCredit']= tonightRepeater.closingCredit;
+        } else {
+          v['frequency'] = v['plTone'] = v['repeaterName'] = v['repeaterCredit'] = '';
+        }
+
+        if (system) {
+          v['systemName'] = system.name;
+          var primary = system.primary.length > 0 ? system.primary[0] : null;
+          v['primaryName']        = primary ? primary.repeaterName : '';
+          v['primaryFrequency']   = primary ? primary.frequency : '';
+          v['primaryPlTone']      = primary ? primary.plTone : '';
+          v['primaryDescription'] = primary ? primary.description : '';
+
+          var alts = system.alternate;
+          var fa = alts.length > 0 ? alts[0] : null;
+          v['alternateName']        = fa ? fa.repeaterName : '';
+          v['alternateFrequency']   = fa ? fa.frequency : '';
+          v['alternatePlTone']      = fa ? fa.plTone : '';
+          v['alternateDescription'] = fa ? fa.description : '';
+          v['alternateNames']       = alts.map(function(a) { return a.repeaterName; }).join(', ');
+
+          var linked = system.linked;
+          v['linkedNames'] = linked.map(function(l) { return l.repeaterName; }).join(', ');
+          v['linkedFull']  = linked.map(function(l) {
+            return l.repeaterName + ' ' + l.frequency + ' / ' + l.plTone;
+          }).join(', ');
+          v['linkedCount'] = String(linked.length);
+
+          var links = system.links;
+          var echoEntry = null;
+          for (var li = 0; li < links.length; li++) {
+            if (links[li].type.toLowerCase() === 'echolink') { echoEntry = links[li]; break; }
+          }
+          v['echolinkNode'] = echoEntry ? echoEntry.repeaterName : '';
+          v['links'] = links.map(function(l) { return l.type + ': ' + l.repeaterName; }).join(', ');
+        } else {
+          ['systemName','primaryName','primaryFrequency','primaryPlTone','primaryDescription',
+           'alternateName','alternateFrequency','alternatePlTone','alternateDescription','alternateNames',
+           'linkedNames','linkedFull','linkedCount','echolinkNode','links'].forEach(function(k) { v[k] = ''; });
+          v['linkedCount'] = '0';
+        }
+        return v;
+      }
+
+      function buildActiveScript(input, template, system, tonightRepeater) {
+        var vars = buildVars(input.date, input.ncoCallsign, input.ncoName || '',
+                             input.ncoLocation || '', input.netType, template.name, system, tonightRepeater);
+        var sections = template.sections.slice().sort(function(a, b) { return a.order - b.order; });
+        return {
+          template: template,
+          phase: 'preamble',
+          sectionIndex: 0,
+          preamble: substituteVariables(template.preamble, vars),
+          credits:  substituteVariables(template.credits, vars),
+          sections: sections.map(function(s) {
+            return { id: s.id, title: s.title, callToAir: s.callToAir, notes: s.notes, order: s.order,
+                     substitutedCallToAir: substituteVariables(s.callToAir, vars) };
+          }),
+        };
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Slice 4 — Script panel rendering
+      // ─────────────────────────────────────────────────────────────────────
+      function renderScriptPanel() {
+        var panel = $('script-panel');
+        var script = NetControl.activeScript;
+        if (!script || script.phase !== 'section') { panel.hidden = true; return; }
+        panel.hidden = false;
+
+        var sec = script.sections[script.sectionIndex];
+        $('section-title-text').textContent = sec.title;
+        $('section-calltoair-text').textContent = sec.substitutedCallToAir;
+
+        var notesEl = $('section-notes-text');
+        if (sec.notes) { notesEl.textContent = sec.notes; notesEl.hidden = false; }
+        else { notesEl.hidden = true; }
+
+        var total = script.sections.length;
+        $('section-progress-text').textContent = 'Section ' + (script.sectionIndex + 1) + ' of ' + total;
+
+        var nextBtn = $('btn-next-section');
+        nextBtn.textContent = (script.sectionIndex === total - 1) ? 'Click and Hold for Credits' : 'Click and Hold for Next Section';
+        updateNextSectionAmber();
+      }
+
+      function updateNextSectionAmber() {
+        var btn = $('btn-next-section');
+        if (!btn || !NetControl.activeScript || NetControl.activeScript.phase !== 'section') return;
+        btn.classList.toggle('btn-amber', hasUnrecognizedCheckins());
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Slice 4 — Hold-to-advance setup
+      // ─────────────────────────────────────────────────────────────────────
+      function setupHoldButton(btn, onComplete) {
+        var holdTimer = null;
+        function startHold(e) {
+          e.preventDefault();
+          btn.focus(); // required for iOS Safari when preventDefault() is used
+          btn.classList.add('holding');
+          holdTimer = setTimeout(function() {
+            holdTimer = null; btn.classList.remove('holding'); onComplete();
+          }, 1500);
+        }
+        function cancelHold() {
+          if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+          btn.classList.remove('holding');
+        }
+        btn.addEventListener('pointerdown', startHold);
+        btn.addEventListener('pointerup', cancelHold);
+        btn.addEventListener('pointercancel', cancelHold);
+      }
+
+      function onNextSection() {
+        var script = NetControl.activeScript;
+        if (!script) return;
+        if (script.sectionIndex === script.sections.length - 1) {
+          script.phase = 'credits';
+          $('credits-text').textContent = script.credits;
+          showScreen('screen-credits');
+        } else {
+          script.sectionIndex++;
+          renderScriptPanel();
+        }
+      }
+
+      function onBackSection() {
+        var script = NetControl.activeScript;
+        if (!script) return;
+        if (script.sectionIndex === 0) {
+          script.phase = 'preamble';
+          showScreen('screen-preamble');
+        } else {
+          script.sectionIndex--;
+          renderScriptPanel();
+        }
+      }
+
+      function onBeginNet() {
+        var script = NetControl.activeScript;
+        if (!script) { showScreen('screen-log'); return; }
+        script.phase = 'section';
+        script.sectionIndex = 0;
+        renderScriptPanel();
+        showScreen('screen-log');
+        setTimeout(function() { $('f-callsign').focus(); }, 0);
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Slice 4 — Repeater system and net script dropdowns
+      // ─────────────────────────────────────────────────────────────────────
+      function updateRepeaterSystemDropdown() {
+        var sel = $('f-repeater-system');
+        sel.textContent = '';
+        NetControl.repeaterSystems.forEach(function(sys) {
+          var opt = document.createElement('option');
+          opt.value = sys.name; opt.textContent = sys.name;
+          sel.appendChild(opt);
+        });
+        var noneOpt = document.createElement('option');
+        noneOpt.value = ''; noneOpt.textContent = 'None / Other';
+        sel.appendChild(noneOpt);
+        onRepeaterSystemChange();
+      }
+
+      function onRepeaterSystemChange() {
+        var sel = $('f-repeater-system');
+        var selectedName = sel.value;
+        var system = NetControl.repeaterSystems.find(function(s) { return s.name === selectedName; });
+        var subPicker  = $('repeater-sub-picker');
+        var otherRow   = $('repeater-other-row');
+        var summaryEl  = $('repeater-system-summary');
+        var tonightSel = $('f-tonight-repeater');
+
+        if (!system) {
+          subPicker.hidden = true; otherRow.hidden = false; summaryEl.textContent = ''; return;
+        }
+        otherRow.hidden = true;
+
+        var selectable = system.primary.concat(system.alternate).sort(function(a, b) {
+          return a.displayOrder - b.displayOrder;
+        });
+        if (selectable.length > 0) {
+          tonightSel.textContent = '';
+          selectable.forEach(function(entry) {
+            var opt = document.createElement('option');
+            opt.value = String(entry.displayOrder);
+            opt.textContent = entry.repeaterName + (entry.frequency ? ' — ' + entry.frequency : '');
+            tonightSel.appendChild(opt);
+          });
+          var defaultEntry = system.primary.length > 0 ? system.primary[0] : system.alternate[0];
+          tonightSel.value = String(defaultEntry.displayOrder);
+          subPicker.hidden = false;
+        } else {
+          subPicker.hidden = true; // linked-only system
+        }
+
+        var allEntries = system.primary.concat(system.linked, system.alternate, system.links);
+        summaryEl.textContent = allEntries.map(function(e) { return e.repeaterName; }).join(', ');
+      }
+
+      function updateNetScriptDropdown() {
+        var sel = $('f-net-script');
+        var currentVal = sel.value;
+        sel.textContent = '';
+        var noScript = document.createElement('option');
+        noScript.value = ''; noScript.textContent = 'No Script'; sel.appendChild(noScript);
+        NetControl.templates.forEach(function(t) {
+          var opt = document.createElement('option');
+          opt.value = t.templateId;
+          opt.textContent = t.name + (t.isDefault ? ' (default)' : '');
+          if (t.sectionsParseError) opt.textContent += ' ⚠';
+          sel.appendChild(opt);
+        });
+        // Restore or default to the default template.
+        var defaultT = NetControl.templates.find(function(t) { return t.isDefault; });
+        if (currentVal && sel.querySelector('option[value="' + currentVal + '"]')) {
+          sel.value = currentVal;
+        } else if (defaultT) {
+          sel.value = defaultT.templateId;
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Screen 1: Start
+      // ─────────────────────────────────────────────────────────────────────
       function todayLocalIso() {
-        var d = new Date();
-        var pad = function (n) { return String(n).padStart(2, '0'); };
-        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+        var d = new Date(), pad = function(n) { return String(n).padStart(2, '0'); };
+        return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
       }
       function nowLocalHm() {
-        var d = new Date();
-        var pad = function (n) { return String(n).padStart(2, '0'); };
+        var d = new Date(), pad = function(n) { return String(n).padStart(2, '0'); };
         return pad(d.getHours()) + ':' + pad(d.getMinutes());
       }
       function initStartDefaults() {
@@ -910,14 +1165,38 @@
 
       async function onStart() {
         clearAllStartErrors();
+
+        var repeaterSystemSel = $('f-repeater-system');
+        var selectedSystemName = repeaterSystemSel.value;
+        var system = NetControl.repeaterSystems.find(function(s) { return s.name === selectedSystemName; }) || null;
+
+        var tonightRepeater = null;
+        if (system) {
+          var subPicker = $('f-tonight-repeater');
+          if (!$('repeater-sub-picker').hidden && subPicker.value) {
+            var displayOrder = parseInt(subPicker.value, 10);
+            var entries = system.primary.concat(system.alternate);
+            tonightRepeater = entries.find(function(e) { return e.displayOrder === displayOrder; }) || null;
+          }
+        }
+
+        var scriptId = $('f-net-script').value;
+        var selectedTemplate = scriptId
+          ? (NetControl.templates.find(function(t) { return t.templateId === scriptId; }) || null)
+          : null;
+
         var input = {
           date: $('f-date').value,
           time: $('f-time').value,
           netType: $('f-net-type').value.trim(),
           ncoCallsign: $('f-nco').value.trim().toUpperCase(),
-          repeater: $('f-repeater').value,
+          repeater: (!system) ? $('f-repeater').value : '',
           purposeNotes: $('f-notes').value,
+          ncoName: $('f-nco-name').value.trim(),
+          ncoLocation: $('f-nco-location').value.trim(),
+          repeaterSystem: selectedSystemName || '',
         };
+
         var ok = true;
         if (!validDate(input.date)) { setFieldError('e-date', 'Date must look like 2026-05-12.'); ok = false; }
         if (!validTime(input.time)) { setFieldError('e-time', 'Time must look like 19:00 (24-hour).'); ok = false; }
@@ -932,220 +1211,573 @@
         try {
           var result = await callWithRetry('startSession', Object.assign({ requestId: NetControl.inFlightStart.requestId }, input));
           if (!result || !result.ok) {
-            if (result && result.error === 'BUSY_TRY_AGAIN') {
-              toast('Try again — system busy.');
-            } else if (result && result.error === 'INVALID_INPUT') {
-              setFieldError('e-' + result.field, result.reason || 'Invalid');
-            } else if (result && result.error === 'NOT_CONFIGURED') {
-              toast('App not configured — contact trustee.');
-            } else {
-              toast('Could not start net.');
-            }
+            if (result && result.error === 'BUSY_TRY_AGAIN') toast('Try again — system busy.');
+            else if (result && result.error === 'INVALID_INPUT') setFieldError('e-' + result.field, result.reason || 'Invalid');
+            else if (result && result.error === 'NOT_CONFIGURED') toast('App not configured — contact trustee.');
+            else toast('Could not start net.');
             return;
           }
+
           NetControl.sessionId = result.sessionId;
           NetControl.netType = input.netType;
           NetControl.ncoCallsign = input.ncoCallsign;
           NetControl.netTime = input.time;
+          NetControl.ncoName = input.ncoName;
+          NetControl.ncoLocation = input.ncoLocation;
+          NetControl.repeaterSystem = system;
+          NetControl.tonightRepeater = tonightRepeater;
           NetControl.inFlightStart = null;
+
+          // Build the active script (or null for No Script).
+          if (selectedTemplate) {
+            NetControl.activeScript = buildActiveScript(input, selectedTemplate, system, tonightRepeater);
+          } else {
+            NetControl.activeScript = null;
+          }
+
+          purgeStaleRecogKeys();
+          startFccTimer();
           renderHeader();
           renderCounters();
           renderList(null);
-          showScreen('screen-log');
-          startFccTimer();
-          setTimeout(function () { $('f-callsign').focus(); }, 0);
+
+          if (NetControl.activeScript) {
+            $('preamble-text').textContent = NetControl.activeScript.preamble;
+            showScreen('screen-preamble');
+          } else {
+            showScreen('screen-log');
+            setTimeout(function() { $('f-callsign').focus(); }, 0);
+          }
 
           // Fire-and-forget roster fetch.
           var fetchSessionId = NetControl.sessionId;
-          callWithRetry('getRosterSnapshot', {}).then(function (snap) {
+          callWithRetry('getRosterSnapshot', {}).then(function(snap) {
             if (NetControl.sessionId !== fetchSessionId) return;
             if (snap && snap.ok) {
-              NetControl.roster = snap.roster;
-              NetControl.rosterLoaded = true;
-              if ($('e-callsign').textContent === LOADING_ROSTER_MSG) {
-                setFieldError('e-callsign', '');
-              }
-            } else {
-              NetControl.rosterLoadError = true;
-            }
-          }).catch(function () {
+              NetControl.roster = snap.roster; NetControl.rosterLoaded = true;
+              if ($('e-callsign').textContent === LOADING_ROSTER_MSG) setFieldError('e-callsign', '');
+            } else { NetControl.rosterLoadError = true; }
+          }).catch(function() {
             if (NetControl.sessionId !== fetchSessionId) return;
             NetControl.rosterLoadError = true;
           });
-        } catch (e) {
+        } catch(e) {
           toast('Network error — try again.');
         } finally {
           $('btn-start').disabled = false;
         }
       }
 
-      // -----------------------------------------------------------------
-      // Screen 2: Logging.
-      // -----------------------------------------------------------------
+      // ─────────────────────────────────────────────────────────────────────
+      // Screen 2: Logging
+      // ─────────────────────────────────────────────────────────────────────
       async function onLog() {
         setFieldError('e-callsign', '');
         var raw = $('f-callsign').value.trim().toUpperCase();
         if (!validCallsign(raw)) {
           if (isLikelySuffixOnly(raw)) {
-            if (!NetControl.inFlightCheckin) {
-              NetControl.inFlightCheckin = { eventId: uuid4(), callsign: null };
-            }
+            if (!NetControl.inFlightCheckin) NetControl.inFlightCheckin = { eventId: uuid4(), callsign: null };
             if (NetControl.rosterLoadError) {
-              setFieldError('e-callsign', ROSTER_UNAVAILABLE_MSG);
-              NetControl.inFlightCheckin = null;
-              return;
+              setFieldError('e-callsign', ROSTER_UNAVAILABLE_MSG); NetControl.inFlightCheckin = null; return;
             }
             if (!NetControl.rosterLoaded) {
-              setFieldError('e-callsign', LOADING_ROSTER_MSG);
-              NetControl.inFlightCheckin = null;
-              return;
+              setFieldError('e-callsign', LOADING_ROSTER_MSG); NetControl.inFlightCheckin = null; return;
             }
             var candidates = findCandidatesBySuffix(raw);
-            if (candidates.length > 0) {
-              renderCandidates(candidates);
-              return;
-            }
-            if (NetControl.roster.length === 0) {
-              setFieldError('e-callsign', ROSTER_EMPTY_MSG);
-            } else {
-              setFieldError(
-                'e-callsign',
-                "No callsign in the roster ends with '" + raw + "'. Type the full callsign or check the suffix.",
-              );
-            }
-            NetControl.inFlightCheckin = null;
-            return;
+            if (candidates.length > 0) { renderCandidates(candidates); return; }
+            setFieldError('e-callsign',
+              NetControl.roster.length === 0
+                ? ROSTER_EMPTY_MSG
+                : "No callsign in the roster ends with '" + raw + "'. Type the full callsign or check the suffix.");
+            NetControl.inFlightCheckin = null; return;
           } else {
             setFieldError('e-callsign', 'Callsigns are letters, digits, and / only (e.g. W7ABC, K7XYZ/M).');
           }
           return;
         }
-        if (!NetControl.inFlightCheckin) {
-          NetControl.inFlightCheckin = { eventId: uuid4(), callsign: raw };
-        }
+        if (!NetControl.inFlightCheckin) NetControl.inFlightCheckin = { eventId: uuid4(), callsign: raw };
         $('btn-log').disabled = true;
         try {
           var result = await callWithRetry('recordCheckin', {
-            sessionId: NetControl.sessionId,
-            callsign: raw,
-            eventId: NetControl.inFlightCheckin.eventId,
+            sessionId: NetControl.sessionId, callsign: raw, eventId: NetControl.inFlightCheckin.eventId,
           });
           if (!result || !result.ok) {
             if (result && result.error === 'SESSION_NOT_FOUND') {
-              toast('Session expired — start a new net.');
-              resetSessionLocalState();
-              showScreen('screen-start');
+              toast('Session expired — start a new net.'); resetSessionLocalState(); showScreen('screen-start');
             } else if (result && result.error === 'SESSION_CLOSED') {
-              toast('Net already ended.');
-              resetSessionLocalState();
-              showScreen('screen-start');
+              toast('Net already ended.'); resetSessionLocalState(); showScreen('screen-start');
             } else if (result && result.error === 'INVALID_CALLSIGN') {
               setFieldError('e-callsign', 'Invalid callsign.');
             } else if (result && result.error === 'BUSY_TRY_AGAIN') {
               toast('Try again — system busy.');
-            } else {
-              toast('Could not log check-in.');
-            }
+            } else { toast('Could not log check-in.'); }
             return;
           }
           applyCheckinResult(raw, result);
           NetControl.inFlightCheckin = null;
-          renderCounters();
-          renderList(result.deduped ? null : raw);
-          $('f-callsign').value = '';
-          $('f-callsign').focus();
-        } catch (e) {
-          toast('Network error — try again.');
-        } finally {
-          $('btn-log').disabled = false;
-        }
+          renderCounters(); renderList(result.deduped ? null : raw);
+          updateNextSectionAmber();
+          $('f-callsign').value = ''; $('f-callsign').focus();
+        } catch(e) { toast('Network error — try again.'); }
+        finally { $('btn-log').disabled = false; }
       }
 
-      function onEndTap() {
-        showScreen('screen-end');
-      }
-      function onEndCancel() {
-        showScreen('screen-log');
-        setTimeout(function () { $('f-callsign').focus(); }, 0);
-      }
+      function onEndTap() { showScreen('screen-end'); }
+      function onEndCancel() { showScreen('screen-log'); setTimeout(function() { $('f-callsign').focus(); }, 0); }
+
       async function onEndConfirm() {
         $('btn-end-confirm').disabled = true;
         try {
           var result = await callWithRetry('endSession', { sessionId: NetControl.sessionId });
-          if (!result || !result.ok) {
-            toast('Could not end net.');
-            return;
-          }
+          if (!result || !result.ok) { toast('Could not end net.'); return; }
           stopFccTimer();
-          $('sum-total').textContent = result.checkinCount;
+          $('sum-total').textContent  = result.checkinCount;
           $('sum-unique').textContent = result.uniqueCallsignCount;
-          $('sum-hours').textContent = result.hoursTotal;
-          $('btn-open-sheet').href = result.spreadsheetUrl;
+          $('sum-hours').textContent  = result.hoursTotal;
+          $('btn-open-sheet').href    = result.spreadsheetUrl;
           showScreen('screen-summary');
-        } catch (e) {
-          toast('Network error — try again.');
-        } finally {
-          $('btn-end-confirm').disabled = false;
-        }
+        } catch(e) { toast('Network error — try again.'); }
+        finally { $('btn-end-confirm').disabled = false; }
       }
 
       function onNewNet() {
+        var savedTemplates = NetControl.templates;
+        var savedSystems   = NetControl.repeaterSystems;
+        var savedIsAdmin   = NetControl.isAdmin;
         NetControl = {
-          sessionId: null,
-          netType: '', ncoCallsign: '', netTime: '',
-          checkins: new Map(),
-          history: [],
-          inFlightStart: null,
-          inFlightCheckin: null,
-          roster: [],
-          rosterLoaded: false,
-          rosterLoadError: false,
+          sessionId: null, netType: '', ncoCallsign: '', netTime: '',
+          ncoName: '', ncoLocation: '',
+          checkins: new Map(), history: [],
+          inFlightStart: null, inFlightCheckin: null,
+          roster: [], rosterLoaded: false, rosterLoadError: false,
           manualNameForm: null,
+          activeScript: null, repeaterSystem: null, tonightRepeater: null,
+          templates: savedTemplates, repeaterSystems: savedSystems, isAdmin: savedIsAdmin,
         };
-        ['f-net-type','f-nco','f-repeater','f-notes','f-callsign'].forEach(function (id) {
+        ['f-net-type','f-nco','f-nco-name','f-nco-location','f-repeater','f-notes','f-callsign'].forEach(function(id) {
           var el = $(id); if (el) el.value = '';
         });
-        clearAllStartErrors();
-        initStartDefaults();
-        stopFccTimer();
+        clearAllStartErrors(); initStartDefaults(); stopFccTimer();
+        // Re-initialize dropdowns with current data.
+        if (NetControl.repeaterSystems.length > 0) updateRepeaterSystemDropdown();
+        updateNetScriptDropdown();
         showScreen('screen-start');
       }
 
-      // -----------------------------------------------------------------
-      // Wire up event listeners on DOM ready.
-      // -----------------------------------------------------------------
-      document.addEventListener('DOMContentLoaded', function () {
+      // ─────────────────────────────────────────────────────────────────────
+      // Slice 4 — Template editor
+      // ─────────────────────────────────────────────────────────────────────
+      function insertChip(textarea, chip) {
+        var start = textarea.selectionStart, end = textarea.selectionEnd;
+        textarea.value = textarea.value.slice(0, start) + chip + textarea.value.slice(end);
+        textarea.selectionStart = textarea.selectionEnd = start + chip.length;
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        textarea.focus();
+      }
+
+      function renderChipBar(containerId, textareaId) {
+        var container = $(containerId);
+        container.textContent = '';
+        SCRIPT_CHIP_VARS.forEach(function(chip) {
+          var btn = document.createElement('button');
+          btn.type = 'button'; btn.className = 'chip'; btn.textContent = chip;
+          btn.addEventListener('click', function() { insertChip($(textareaId), chip); });
+          container.appendChild(btn);
+        });
+      }
+
+      function renderEditorList() {
+        var items = $('ed-list-items');
+        items.textContent = '';
+        $('ed-list-loading').hidden = true;
+        var templates = NetControl.templates;
+        if (templates.length === 0) { $('ed-no-templates').hidden = false; return; }
+        $('ed-no-templates').hidden = true;
+        templates.forEach(function(t) {
+          var btn = document.createElement('button');
+          btn.type = 'button'; btn.className = 'ed-template-btn';
+          if (EditorState.selectedId === t.templateId) btn.classList.add('selected');
+
+          var nameSpan = document.createElement('span');
+          nameSpan.textContent = t.name;
+          btn.appendChild(nameSpan);
+
+          if (t.isDefault) {
+            var badge = document.createElement('span'); badge.className = 'default-badge'; badge.textContent = 'default';
+            btn.appendChild(badge);
+          }
+          if (t.sectionsParseError) {
+            var pill = document.createElement('span'); pill.className = 'parse-err-pill'; pill.textContent = 'section error';
+            btn.appendChild(pill);
+          }
+          btn.addEventListener('click', function() { loadTemplateIntoEditor(t); });
+          items.appendChild(btn);
+        });
+      }
+
+      function renderEditorSections() {
+        var container = $('ed-sections-container');
+        container.textContent = '';
+        var sections = EditorState.sections;
+        sections.forEach(function(sec, idx) {
+          var row = document.createElement('div');
+          row.className = 'section-row';
+
+          // Up/down order controls
+          var orderDiv = document.createElement('div');
+          orderDiv.className = 'section-order-controls';
+
+          var upBtn = document.createElement('button');
+          upBtn.type = 'button'; upBtn.className = 'section-move-btn'; upBtn.textContent = '↑';
+          upBtn.disabled = (idx === 0);
+          (function(i) {
+            upBtn.addEventListener('click', function() {
+              if (i === 0) return;
+              var arr = EditorState.sections, tmp = arr[i]; arr[i] = arr[i-1]; arr[i-1] = tmp;
+              arr.forEach(function(s, j) { s.order = j + 1; }); renderEditorSections();
+            });
+          })(idx);
+          orderDiv.appendChild(upBtn);
+
+          var downBtn = document.createElement('button');
+          downBtn.type = 'button'; downBtn.className = 'section-move-btn'; downBtn.textContent = '↓';
+          downBtn.disabled = (idx === sections.length - 1);
+          (function(i) {
+            downBtn.addEventListener('click', function() {
+              var arr = EditorState.sections;
+              if (i >= arr.length - 1) return;
+              var tmp = arr[i]; arr[i] = arr[i+1]; arr[i+1] = tmp;
+              arr.forEach(function(s, j) { s.order = j + 1; }); renderEditorSections();
+            });
+          })(idx);
+          orderDiv.appendChild(downBtn);
+          row.appendChild(orderDiv);
+
+          // Fields
+          var fields = document.createElement('div');
+          fields.className = 'section-fields';
+
+          var titleInput = document.createElement('input');
+          titleInput.type = 'text'; titleInput.maxLength = 100;
+          titleInput.placeholder = 'Section title'; titleInput.value = sec.title;
+          titleInput.className = 'section-title-input';
+          (function(s) { titleInput.addEventListener('input', function() { s.title = titleInput.value; }); })(sec);
+          fields.appendChild(titleInput);
+
+          var ctaInput = document.createElement('textarea');
+          ctaInput.maxLength = 500; ctaInput.placeholder = 'Call-to-air text (read on air)';
+          ctaInput.value = sec.callToAir; ctaInput.className = 'section-cta-input';
+          (function(s) { ctaInput.addEventListener('input', function() { s.callToAir = ctaInput.value; }); })(sec);
+          fields.appendChild(ctaInput);
+
+          var notesInput = document.createElement('textarea');
+          notesInput.maxLength = 500; notesInput.placeholder = 'NCO notes (not read on air, not substituted)';
+          notesInput.value = sec.notes; notesInput.className = 'section-notes-input';
+          (function(s) { notesInput.addEventListener('input', function() { s.notes = notesInput.value; }); })(sec);
+          fields.appendChild(notesInput);
+          row.appendChild(fields);
+
+          // Delete button
+          var delBtn = document.createElement('button');
+          delBtn.type = 'button'; delBtn.className = 'section-del-btn'; delBtn.textContent = '✕';
+          delBtn.title = 'Remove section';
+          (function(i) {
+            delBtn.addEventListener('click', function() {
+              EditorState.sections.splice(i, 1);
+              EditorState.sections.forEach(function(s, j) { s.order = j + 1; });
+              renderEditorSections();
+            });
+          })(idx);
+          row.appendChild(delBtn);
+
+          container.appendChild(row);
+        });
+
+        $('ed-add-section-wrap').hidden = !NetControl.isAdmin;
+      }
+
+      function loadTemplateIntoEditor(t) {
+        EditorState.selectedId = t.templateId;
+        EditorState.isNewTemplate = false;
+        EditorState.sections = t.sections.slice()
+          .sort(function(a, b) { return a.order - b.order; })
+          .map(function(s) { return { id: s.id, title: s.title, callToAir: s.callToAir, notes: s.notes, order: s.order }; });
+
+        $('ed-name').value    = t.name;
+        $('ed-preamble').value = t.preamble;
+        $('ed-credits').value  = t.credits;
+        $('ed-is-default').checked = t.isDefault;
+        $('ed-attribution').textContent = t.updatedBy
+          ? 'Last updated by ' + t.updatedBy + ' on ' + t.updatedAt : '';
+        $('ed-save-status').textContent = '';
+
+        renderEditorSections();
+        renderEditorList();
+
+        if (NetControl.isAdmin) {
+          $('ed-admin-controls').hidden = false;
+          var delBtn = $('btn-delete-template');
+          delBtn.disabled = t.isDefault;
+          delBtn.title = t.isDefault ? 'Cannot delete the default template' : 'Hold 1.5 s to delete';
+        }
+
+        $('ed-form').hidden = false;
+        $('ed-list').hidden = true;
+      }
+
+      function onEditorFormBack() {
+        $('ed-form').hidden = true;
+        $('ed-list').hidden = false;
+        EditorState.selectedId = null;
+        renderEditorList();
+      }
+
+      function onNewScript() {
+        EditorState.selectedId = uuid4();
+        EditorState.isNewTemplate = true;
+        EditorState.sections = [];
+
+        $('ed-name').value = ''; $('ed-preamble').value = ''; $('ed-credits').value = '';
+        $('ed-is-default').checked = (NetControl.templates.filter(function(t) { return !t.deletedAt; }).length === 0);
+        $('ed-attribution').textContent = ''; $('ed-save-status').textContent = '';
+
+        renderEditorSections();
+
+        if (NetControl.isAdmin) {
+          $('ed-admin-controls').hidden = false;
+          $('btn-delete-template').disabled = true;
+          $('btn-delete-template').title = 'Save first before deleting';
+        }
+
+        $('ed-form').hidden = false;
+        $('ed-list').hidden = true;
+        setTimeout(function() { $('ed-name').focus(); }, 0);
+      }
+
+      async function onEditorSave() {
+        var id = EditorState.selectedId;
+        if (!id) { toast('Select or create a script first.'); return; }
+
+        var name = $('ed-name').value.trim();
+        if (!name) { toast('Script name is required.'); return; }
+
+        var existingTemplate = NetControl.templates.find(function(t) { return t.templateId === id; });
+        var payload = {
+          template: {
+            templateId:  id,
+            name:        name,
+            preamble:    $('ed-preamble').value,
+            sections:    EditorState.sections.map(function(s) {
+              return { id: s.id, title: s.title, callToAir: s.callToAir, notes: s.notes, order: s.order };
+            }),
+            credits:     $('ed-credits').value,
+            isDefault:   $('ed-is-default').checked,
+            createdAt:   existingTemplate ? existingTemplate.createdAt : '',
+            updatedAt:   '',
+            updatedBy:   '',
+            deletedAt:   '',
+          },
+        };
+
+        $('btn-save-template').disabled = true;
+        $('ed-save-status').textContent = 'Saving…';
+        try {
+          var result = await callWithRetry('saveTemplate', payload);
+          if (!result || !result.ok) {
+            $('ed-save-status').textContent = '';
+            if (result && result.error === 'NOT_AUTHORIZED') toast('Not authorized to save scripts.');
+            else if (result && result.error === 'INVALID_INPUT') toast('Invalid: ' + result.field + ' — ' + result.reason);
+            else toast('Could not save script.');
+            return;
+          }
+          $('ed-save-status').textContent = 'Saved at ' + result.updatedAt;
+          EditorState.isNewTemplate = false;
+          // Reload templates list.
+          var tResult = await callWithRetry('getTemplates', {});
+          if (tResult && tResult.ok) {
+            NetControl.templates = tResult.templates;
+            updateNetScriptDropdown();
+            renderEditorList();
+            // Refresh delete button state.
+            var freshT = NetControl.templates.find(function(t) { return t.templateId === id; });
+            if (freshT && $('ed-admin-controls') && !$('ed-admin-controls').hidden) {
+              $('btn-delete-template').disabled = freshT.isDefault;
+            }
+          }
+        } catch(e) { toast('Network error — try again.'); $('ed-save-status').textContent = ''; }
+        finally { $('btn-save-template').disabled = false; }
+      }
+
+      async function onEditorDelete() {
+        var id = EditorState.selectedId;
+        if (!id || EditorState.isNewTemplate) { toast('Nothing to delete.'); return; }
+
+        try {
+          var result = await callWithRetry('deleteTemplate', id);
+          if (!result || !result.ok) {
+            if (result && result.error === 'NOT_AUTHORIZED') toast('Not authorized.');
+            else if (result && result.error === 'INVALID_INPUT') toast(result.reason || 'Cannot delete.');
+            else if (result && result.error === 'NOT_FOUND') toast('Script not found.');
+            else toast('Could not delete script.');
+            return;
+          }
+          toast('Script deleted.');
+          var tResult = await callWithRetry('getTemplates', {});
+          if (tResult && tResult.ok) {
+            NetControl.templates = tResult.templates;
+            updateNetScriptDropdown();
+          }
+          onEditorFormBack();
+        } catch(e) { toast('Network error — try again.'); }
+      }
+
+      function onAddSection() {
+        EditorState.sections.push({
+          id: uuid4(), title: '', callToAir: '', notes: '',
+          order: EditorState.sections.length + 1,
+        });
+        renderEditorSections();
+        // Scroll to bottom of section container.
+        var container = $('ed-sections-container');
+        var lastRow = container.lastElementChild;
+        if (lastRow) lastRow.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Focus title of new section.
+        var inputs = container.querySelectorAll('.section-title-input');
+        if (inputs.length > 0) setTimeout(function() { inputs[inputs.length - 1].focus(); }, 50);
+      }
+
+      function openEditor() {
+        renderChipBar('ed-preamble-chips', 'ed-preamble');
+        renderChipBar('ed-credits-chips', 'ed-credits');
+        renderEditorList();
+        $('ed-admin-header').hidden = !NetControl.isAdmin;
+        $('ed-form').hidden = true;
+        $('ed-list').hidden = false;
+        showScreen('screen-editor');
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Page-load: fetch templates, repeater systems, admin status in parallel
+      // ─────────────────────────────────────────────────────────────────────
+      function initSlice4Data() {
+        // Templates
+        callServer('getTemplates', {}).then(function(result) {
+          if (result && result.ok) {
+            NetControl.templates = result.templates;
+            updateNetScriptDropdown();
+            if ($('screen-editor').classList.contains('active')) renderEditorList();
+          } else {
+            // Leave "No Script" only — can still operate without templates.
+            updateNetScriptDropdown();
+          }
+        }).catch(function() { updateNetScriptDropdown(); });
+
+        // Repeater systems
+        callServer('getRepeaterSystems', {}).then(function(result) {
+          if (result && result.ok && result.systems.length > 0) {
+            NetControl.repeaterSystems = result.systems;
+            updateRepeaterSystemDropdown();
+          } else {
+            // Fallback: just "None / Other" (already default on select)
+            var sel = $('f-repeater-system');
+            sel.textContent = '';
+            var opt = document.createElement('option'); opt.value = ''; opt.textContent = 'None / Other';
+            sel.appendChild(opt);
+            $('repeater-other-row').hidden = false;
+          }
+        }).catch(function() {
+          var sel = $('f-repeater-system');
+          sel.textContent = '';
+          var opt = document.createElement('option'); opt.value = ''; opt.textContent = 'None / Other';
+          sel.appendChild(opt);
+          $('repeater-other-row').hidden = false;
+        });
+
+        // Admin status
+        google.script.run
+          .withSuccessHandler(function(isAdmin) {
+            NetControl.isAdmin = isAdmin === true;
+          })
+          .withFailureHandler(function() { NetControl.isAdmin = false; })
+          .getAdminStatus();
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Wire up event listeners on DOM ready
+      // ─────────────────────────────────────────────────────────────────────
+      document.addEventListener('DOMContentLoaded', function() {
         initStartDefaults();
+        // Initial state: show None/Other until systems load
+        $('repeater-other-row').hidden = false;
+
+        // Screen 1: Start
         $('btn-start').addEventListener('click', onStart);
+        $('btn-open-editor').addEventListener('click', openEditor);
+
+        $('f-repeater-system').addEventListener('change', onRepeaterSystemChange);
+
+        // Screen 1b: Preamble
+        $('btn-begin-net').addEventListener('click', onBeginNet);
+        $('btn-preamble-noscript').addEventListener('click', function() {
+          // Skip script — go directly to logging.
+          NetControl.activeScript = null;
+          $('script-panel').hidden = true;
+          renderHeader(); renderCounters(); renderList(null);
+          showScreen('screen-log');
+          setTimeout(function() { $('f-callsign').focus(); }, 0);
+        });
+
+        // Screen 2: Logging — script panel
+        $('btn-back-section').addEventListener('click', onBackSection);
+        setupHoldButton($('btn-next-section'), onNextSection);
+
+        // Screen 2: Logging — check-ins
         $('btn-log').addEventListener('click', onLog);
-        $('f-callsign').addEventListener('keydown', function (e) {
+        $('f-callsign').addEventListener('keydown', function(e) {
           if (e.key !== 'Enter') return;
           e.preventDefault();
           if (!$('candidates-row').hidden) return;
           onLog();
         });
         $('btn-end').addEventListener('click', onEndTap);
+
+        // Screen 2b: Credits
+        $('btn-end-net-credits').addEventListener('click', onEndTap);
+
+        // Screen 3: End confirm
         $('btn-end-cancel').addEventListener('click', onEndCancel);
         $('btn-end-confirm').addEventListener('click', onEndConfirm);
+
+        // Screen 4: Summary
         $('btn-new-net').addEventListener('click', onNewNet);
 
-        // FCC ID timer: tap to reset.
+        // FCC ID timer: tap to reset
         var timerEl = $('fcc-timer');
         if (timerEl) {
           timerEl.addEventListener('click', resetFccTimer);
-          timerEl.addEventListener('keydown', function (e) {
+          timerEl.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); resetFccTimer(); }
           });
         }
 
-        // Slice 2 wiring: candidate-list click delegation + cancel button.
-        $('candidates-list').addEventListener('click', function (e) {
+        // Suffix-Tap: candidate click delegation + cancel
+        $('candidates-list').addEventListener('click', function(e) {
           var btn = e.target.closest && e.target.closest('button.candidate');
           if (!btn || btn.disabled) return;
-          var cs = btn.dataset.callsign;
-          if (cs) onCandidateTap(cs);
+          var cs = btn.dataset.callsign; if (cs) onCandidateTap(cs);
         });
         $('btn-candidates-cancel').addEventListener('click', dismissCandidates);
+
+        // Screen 5: Template editor
+        $('btn-editor-close').addEventListener('click', function() { showScreen('screen-start'); });
+        $('btn-form-back').addEventListener('click', onEditorFormBack);
+        $('btn-new-script').addEventListener('click', onNewScript);
+        $('btn-save-template').addEventListener('click', onEditorSave);
+        $('btn-add-section').addEventListener('click', onAddSection);
+        setupHoldButton($('btn-delete-template'), onEditorDelete);
+
+        // Kick off Slice 4 data loads
+        initSlice4Data();
       });
     </script>
   </body>

@@ -21,11 +21,21 @@
 import {
   CHECKINS_HEADERS,
   CheckinsCol,
+  MAX_CREDITS,
   MAX_ID_FIELD,
   MAX_NAME,
+  MAX_NCO_LOCATION,
+  MAX_NCO_NAME,
   MAX_NET_TYPE,
+  MAX_PREAMBLE,
   MAX_PURPOSE_NOTES,
   MAX_REPEATER,
+  MAX_SECTION_CALL_TO_AIR,
+  MAX_SECTION_NOTES,
+  MAX_SECTION_TITLE,
+  MAX_SECTIONS_PER_TEMPLATE,
+  MAX_SYSTEM_NAME,
+  MAX_TEMPLATE_NAME,
   OTHERS_HEADERS,
   OthersCol,
   PROP_ADMIN_EMAILS,
@@ -33,6 +43,8 @@ import {
   PROP_ROSTER_CSV_DRIVE_FOLDER_ID,
   PROP_SPREADSHEET_ID,
   PROP_TRUSTEE_EMAIL,
+  REPEATERS_HEADERS,
+  RepeatersCol,
   ROSTER_HEADERS,
   RosterCol,
   SESSIONS_HEADERS,
@@ -42,21 +54,34 @@ import {
   SESSION_STATUS_OPEN,
   SHEET_CHECKINS,
   SHEET_OTHERS,
+  SHEET_REPEATERS,
   SHEET_ROSTER,
   SHEET_SESSIONS,
   SHEET_SETTINGS,
+  SHEET_TEMPLATES,
   SOURCE_MANUAL,
+  TEMPLATES_HEADERS,
+  TemplatesCol,
+  type DeleteTemplateResult,
   type EndSessionInput,
   type EndSessionResult,
+  type GetRepeaterSystemsResult,
   type GetRosterSnapshotResult,
+  type GetTemplatesResult,
+  type NetTemplate,
   type ReconcileResult,
   type RecordCheckinInput,
   type RecordCheckinResult,
+  type RepeaterEntry,
+  type RepeaterSystem,
   type ResolveNameResult,
   type RosterEntry,
+  type SaveTemplateInput,
+  type SaveTemplateResult,
   type SetupSheetsResult,
   type StartSessionInput,
   type StartSessionResult,
+  type TemplateSection,
 } from './types';
 import {
   appendRowAndGetIndex,
@@ -136,6 +161,9 @@ export function startSession(input: StartSessionInput): StartSessionResult {
     row[SessionsCol.EndTimestamp] = '';
     row[SessionsCol.Status] = SESSION_STATUS_OPEN;
     row[SessionsCol.RequestId] = input.requestId;
+    row[SessionsCol.NCOName] = clampString(input.ncoName, MAX_NCO_NAME);
+    row[SessionsCol.NCOLocation] = clampString(input.ncoLocation, MAX_NCO_LOCATION);
+    row[SessionsCol.RepeaterSystem] = clampString(input.repeaterSystem, MAX_SYSTEM_NAME);
 
     appendRowAndGetIndex(sessions, row);
     return { ok: true, sessionId, deduped: false };
@@ -437,10 +465,18 @@ export function setupSheets(): SetupSheetsResult {
     const ss = getSpreadsheetOrNull();
     if (!ss) return { ok: false, error: 'NOT_CONFIGURED' as const };
 
-    const created: ('Sessions' | 'Checkins' | 'Roster' | 'Others' | 'Settings')[] = [];
+    const created: ('Sessions' | 'Checkins' | 'Roster' | 'Others' | 'Settings' | 'Templates' | 'Repeaters')[] = [];
 
     const sessions = getOrCreateSheetWithHeader(ss, SHEET_SESSIONS, SESSIONS_HEADERS);
     if (sessions.created) created.push('Sessions');
+
+    // Slice 4 Sessions header migration: existing tabs may only have 12 columns.
+    const sessionsHeaderLen = sessions.sheet.getRange(1, 1, 1, sessions.sheet.getLastColumn()).getValues()[0].length;
+    if (sessionsHeaderLen < 15) {
+      sessions.sheet.getRange(1, 13, 1, 3).setValues([['NCOName', 'NCOLocation', 'RepeaterSystem']]);
+      sessions.sheet.setFrozenRows(1);
+      Logger.log('setupSheets: migrated Sessions header to 15 columns');
+    }
 
     const checkins = getOrCreateSheetWithHeader(ss, SHEET_CHECKINS, CHECKINS_HEADERS);
     if (checkins.created) created.push('Checkins');
@@ -454,7 +490,30 @@ export function setupSheets(): SetupSheetsResult {
     const settings = getOrCreateSheetWithHeader(ss, SHEET_SETTINGS, SETTINGS_HEADERS);
     if (settings.created) created.push('Settings');
 
+    // Slice 4: Templates tab.
+    const templates = getOrCreateSheetWithHeader(ss, SHEET_TEMPLATES, TEMPLATES_HEADERS);
+    if (templates.created) {
+      created.push('Templates');
+      seedDefaultTemplate(templates.sheet);
+    }
+
+    // Slice 4: Repeaters tab.
+    const repeaters = getOrCreateSheetWithHeader(ss, SHEET_REPEATERS, REPEATERS_HEADERS);
+    if (repeaters.created) {
+      created.push('Repeaters');
+      seedDefaultRepeaters(repeaters.sheet);
+    } else {
+      // Migration: existing Repeaters tabs (from dev iterations) may lack Description + ClosingCredit.
+      const repHeaderLen = repeaters.sheet.getRange(1, 1, 1, repeaters.sheet.getLastColumn()).getValues()[0].length;
+      if (repHeaderLen < 9) {
+        repeaters.sheet.getRange(1, 8, 1, 2).setValues([['Description', 'ClosingCredit']]);
+        repeaters.sheet.setFrozenRows(1);
+        Logger.log('setupSheets: migrated Repeaters header to 9 columns');
+      }
+    }
+
     Logger.log(`setupSheets: created=${JSON.stringify(created)}`);
+    Logger.log('setupSheets: REMINDER — getRepeaterSystems() has no auth gate; do not store non-published tactical data in the Repeaters tab if the web app is publicly accessible.');
     return { ok: true, created };
   });
 
@@ -982,4 +1041,415 @@ export function installSundaySyncTrigger(): void {
     .onWeekDay(ScriptApp.WeekDay.SUNDAY)
     .atHour(2) // fires 02:00–03:00 PT; CSV expected by 01:30 PT
     .create();
+}
+
+// ---------------------------------------------------------------------------
+// Slice 4 — Template and Repeater seed helpers (called from setupSheets).
+// ---------------------------------------------------------------------------
+
+function seedDefaultTemplate(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
+  const now = nowIso();
+
+  const sections: TemplateSection[] = [
+    { id: Utilities.getUuid(), title: 'A through D',     callToAir: 'Alpha through Delta — please call now.',                                                 notes: '',                                                                                                                                          order: 1 },
+    { id: Utilities.getUuid(), title: 'E through H',     callToAir: 'Echo through Hotel — please call now.',                                                  notes: '',                                                                                                                                          order: 2 },
+    { id: Utilities.getUuid(), title: 'I through L',     callToAir: 'India through Lima — please call now.',                                                  notes: '',                                                                                                                                          order: 3 },
+    { id: Utilities.getUuid(), title: 'M through R',     callToAir: 'Mike through Romeo — please call now.',                                                  notes: '',                                                                                                                                          order: 4 },
+    { id: Utilities.getUuid(), title: 'S through Z',     callToAir: 'Sierra through Zulu — please call now.',                                                 notes: '',                                                                                                                                          order: 5 },
+    { id: Utilities.getUuid(), title: 'Late or Missed',  callToAir: 'Are there any late or missed ARES member check-ins?',                                    notes: '',                                                                                                                                          order: 6 },
+    { id: Utilities.getUuid(), title: 'Visitors',        callToAir: 'Are there any visitor check-ins for the Washington County ARES net this evening?',       notes: 'Ask for call, name, location, and any ARES or ARRL position.',                                                                              order: 7 },
+    { id: Utilities.getUuid(), title: 'Announcements',   callToAir: 'The net should be aware of the following upcoming ARES events.',                         notes: 'Announce events from the WashCoARES website calendar for the next two weeks. Read any QSTs submitted by the EC.',                          order: 8 },
+    { id: Utilities.getUuid(), title: 'Business',        callToAir: 'Is there any other business, questions, or discussion for the net?',                     notes: '',                                                                                                                                          order: 9 },
+    { id: Utilities.getUuid(), title: 'Last Call',       callToAir: 'Last call for late or missed member or visitor check-ins.',                              notes: '',                                                                                                                                          order: 10 },
+  ];
+
+  const preamble =
+    'Good evening. This is {{ncoCallsign}}, your net control station for this session of the Washington County Amateur Radio Emergency Service Net. This is a directed net. Those stations checking into the net are expected to monitor unless they request to be excused.\n\n' +
+    'Regular sessions of this net meet Tuesdays at 7 p.m. local time except for meeting night, which is the third Tuesday of each month. This net is sanctioned to meet on the {{primaryDescription}} {{primaryFrequency}} repeater with a {{primaryPlTone}} tone which is our primary Net frequency. Our alternate frequency is the {{alternateFrequency}} repeater with a {{alternatePlTone}} tone.\n\n' +
+    'Please refrain from using the word break unless you have a bona-fide emergency. Stations using the word break will be assumed to be indicating an emergency transmission.\n\n' +
+    'All stations standby for net check in. Check-ins will be in alphabetical order of call sign suffixes. Visitor check-ins will occur after the regular member check-ins. This is {{ncoCallsign}}, located in {{ncoLocation}}, and my name is {{ncoName}}. The net is now open for check-ins.';
+
+  const credits =
+    'This is {{ncoCallsign}}, your net control for this session of the Washington County Amateur Radio Emergency Service Net.\n\n' +
+    '{{repeaterCredit}} I also thank everyone who has participated in the net this evening. This session of the Washington County ARES Net is now closed, and the frequency is now open for regular traffic. 73 everyone. {{ncoCallsign}} clear.';
+
+  const row = new Array(TEMPLATES_HEADERS.length).fill('');
+  row[TemplatesCol.TemplateId]   = Utilities.getUuid();
+  row[TemplatesCol.Name]         = 'WashCoARES Weekly Net';
+  row[TemplatesCol.Preamble]     = preamble;
+  row[TemplatesCol.SectionsJson] = JSON.stringify(sections);
+  row[TemplatesCol.Credits]      = credits;
+  row[TemplatesCol.IsDefault]    = true;
+  row[TemplatesCol.CreatedAt]    = now;
+  row[TemplatesCol.UpdatedAt]    = now;
+  row[TemplatesCol.UpdatedBy]    = Session.getActiveUser().getEmail();
+  row[TemplatesCol.DeletedAt]    = '';
+  sheet.appendRow(row);
+}
+
+function seedDefaultRepeaters(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
+  const washCoRows: unknown[][] = [
+    ['WashCoARES', 'WORC',     '145.450 MHz', '107.2 Hz', 'primary',   1, true,  'Western Oregon Radio Club, Inc.',             'We thank the Western Oregon Radio Club, Inc. for the use of the 145.450 MHz repeater.'],
+    ['WashCoARES', 'Wes Allen','440.350 MHz', '127.3 Hz', 'alternate', 2, true,  'Family of Wes Allen, silent key',             'We thank the family of Wes Allen, silent key, for the use of the 440.350 MHz repeater.'],
+    ['WashCoARES', 'WCARC',    '147.360 MHz', '',         'alternate', 3, true,  'Washington County Amateur Radio Corporation', 'We thank the Washington County Amateur Radio Corporation for the use of the 147.360 MHz repeater.'],
+  ];
+  const d1Rows: unknown[][] = [
+    ['Oregon ARES D1', '(trustee fills)', '147.320 MHz', '100.0 Hz', 'linked',    1, false, '', ''],
+    ['Oregon ARES D1', '(trustee fills)', '442.325 MHz', '100.0 Hz', 'linked',    2, false, '', ''],
+    ['Oregon ARES D1', '(trustee fills)', '444.400 MHz', '100.0 Hz', 'linked',    3, false, '', ''],
+    ['Oregon ARES D1', '(trustee fills)', '147.040 MHz', '100.0 Hz', 'linked',    4, false, '', ''],
+    ['Oregon ARES D1', '(trustee fills)', '146.720 MHz', '114.8 Hz', 'linked',    5, false, 'Wikiup Mountain', ''],
+    ['Oregon ARES D1', '(trustee fills)', '146.840 MHz', '',         'alternate', 6, false, '', ''],
+    ['Oregon ARES D1', 'K7RPT-L',         '',            '',         'EchoLink',  7, false, 'K7RPT-L repeater connection', ''],
+  ];
+  [...washCoRows, ...d1Rows].forEach((r) => sheet.appendRow(r as unknown[]));
+}
+
+// ---------------------------------------------------------------------------
+// Slice 4 — getAdminStatus: client calls this to determine editor visibility.
+// ---------------------------------------------------------------------------
+
+export function getAdminStatus(): boolean {
+  const callerEmail = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+  if (!callerEmail) return false;
+  const adminsRaw = PropertiesService.getScriptProperties().getProperty(PROP_ADMIN_EMAILS) ?? '';
+  const allowed = adminsRaw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0);
+  return allowed.includes(callerEmail);
+}
+
+// ---------------------------------------------------------------------------
+// Slice 4 — getTemplates: returns all non-deleted templates, sorted by Name.
+// ---------------------------------------------------------------------------
+
+export function getTemplates(): GetTemplatesResult {
+  const ss = getSpreadsheetOrNull();
+  if (!ss) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  let sheet: GoogleAppsScript.Spreadsheet.Sheet | null;
+  try {
+    sheet = getSheetOrNull(ss, SHEET_TEMPLATES);
+  } catch (e) {
+    Logger.log(`getTemplates: getSheetByName threw: ${String(e)}`);
+    return { ok: false, error: 'READ_FAILED' };
+  }
+  if (!sheet) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  let values: unknown[][];
+  try {
+    values = sheet.getDataRange().getValues();
+  } catch (e) {
+    Logger.log(`getTemplates: getValues threw: ${String(e)}`);
+    return { ok: false, error: 'READ_FAILED' };
+  }
+
+  const templates: NetTemplate[] = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const deletedAt = String(row[TemplatesCol.DeletedAt] ?? '').trim();
+    if (deletedAt) continue; // soft-deleted
+
+    let sections: TemplateSection[] = [];
+    let sectionsParseError = false;
+    const sectionsJson = String(row[TemplatesCol.SectionsJson] ?? '').trim();
+    if (sectionsJson) {
+      try {
+        const parsed = JSON.parse(sectionsJson);
+        if (Array.isArray(parsed)) {
+          sections = parsed as TemplateSection[];
+        } else {
+          sectionsParseError = true;
+        }
+      } catch {
+        sectionsParseError = true;
+      }
+    }
+
+    const isDefaultRaw = row[TemplatesCol.IsDefault];
+    const isDefault = isDefaultRaw === true || String(isDefaultRaw).toUpperCase() === 'TRUE';
+
+    templates.push({
+      templateId:         String(row[TemplatesCol.TemplateId] ?? ''),
+      name:               String(row[TemplatesCol.Name] ?? ''),
+      preamble:           String(row[TemplatesCol.Preamble] ?? ''),
+      sections,
+      credits:            String(row[TemplatesCol.Credits] ?? ''),
+      isDefault,
+      createdAt:          String(row[TemplatesCol.CreatedAt] ?? ''),
+      updatedAt:          String(row[TemplatesCol.UpdatedAt] ?? ''),
+      updatedBy:          String(row[TemplatesCol.UpdatedBy] ?? ''),
+      deletedAt:          '',
+      ...(sectionsParseError ? { sectionsParseError: true } : {}),
+    });
+  }
+
+  // Sort: Name ascending; tiebreaker: createdAt ascending.
+  templates.sort((a, b) => {
+    const n = a.name.localeCompare(b.name);
+    if (n !== 0) return n;
+    return a.createdAt.localeCompare(b.createdAt);
+  });
+
+  return { ok: true, templates };
+}
+
+// ---------------------------------------------------------------------------
+// Slice 4 — getRepeaterSystems: returns all active systems grouped and sorted.
+// ---------------------------------------------------------------------------
+
+export function getRepeaterSystems(): GetRepeaterSystemsResult {
+  const ss = getSpreadsheetOrNull();
+  if (!ss) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  let sheet: GoogleAppsScript.Spreadsheet.Sheet | null;
+  try {
+    sheet = getSheetOrNull(ss, SHEET_REPEATERS);
+  } catch (e) {
+    Logger.log(`getRepeaterSystems: getSheetByName threw: ${String(e)}`);
+    return { ok: false, error: 'READ_FAILED' };
+  }
+  if (!sheet) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  let values: unknown[][];
+  try {
+    values = sheet.getDataRange().getValues();
+  } catch (e) {
+    Logger.log(`getRepeaterSystems: getValues threw: ${String(e)}`);
+    return { ok: false, error: 'READ_FAILED' };
+  }
+
+  const systemMap = new Map<string, RepeaterSystem>();
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const isActiveRaw = row[RepeatersCol.IsActive];
+    const isActive = isActiveRaw === true || String(isActiveRaw).toUpperCase() === 'TRUE';
+    if (!isActive) continue;
+
+    const entry: RepeaterEntry = {
+      systemName:    String(row[RepeatersCol.SystemName]   ?? '').trim(),
+      repeaterName:  String(row[RepeatersCol.RepeaterName] ?? '').trim(),
+      frequency:     String(row[RepeatersCol.Frequency]    ?? '').trim(),
+      plTone:        String(row[RepeatersCol.PlTone]       ?? '').trim(),
+      type:          String(row[RepeatersCol.Type]         ?? '').trim(),
+      displayOrder:  Number(row[RepeatersCol.DisplayOrder]) || 0,
+      isActive:      true,
+      description:   String(row[RepeatersCol.Description]  ?? '').trim(),
+      closingCredit: String(row[RepeatersCol.ClosingCredit]?? '').trim(),
+    };
+    if (!entry.systemName) continue;
+
+    if (!systemMap.has(entry.systemName)) {
+      systemMap.set(entry.systemName, { name: entry.systemName, primary: [], linked: [], alternate: [], links: [] });
+    }
+    const sys = systemMap.get(entry.systemName)!;
+
+    const typeLower = entry.type.toLowerCase();
+    if (typeLower === 'primary')   sys.primary.push(entry);
+    else if (typeLower === 'linked')    sys.linked.push(entry);
+    else if (typeLower === 'alternate') sys.alternate.push(entry);
+    else                                sys.links.push(entry);
+  }
+
+  // Sort entries within each system by displayOrder; sort systems alphabetically.
+  const byOrder = (a: RepeaterEntry, b: RepeaterEntry) => a.displayOrder - b.displayOrder;
+  const systems: RepeaterSystem[] = [];
+  for (const sys of systemMap.values()) {
+    sys.primary.sort(byOrder);
+    sys.linked.sort(byOrder);
+    sys.alternate.sort(byOrder);
+    sys.links.sort(byOrder);
+    systems.push(sys);
+  }
+  systems.sort((a, b) => a.name.localeCompare(b.name));
+
+  return { ok: true, systems };
+}
+
+// ---------------------------------------------------------------------------
+// Slice 4 — saveTemplate: admin-only upsert.
+// ---------------------------------------------------------------------------
+
+export function saveTemplate(input: SaveTemplateInput): SaveTemplateResult {
+  // Step 1: caller check (outside the lock — no I/O needed).
+  const callerEmail = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+  if (!callerEmail) return { ok: false, error: 'NOT_AUTHORIZED' };
+  const adminsRaw = PropertiesService.getScriptProperties().getProperty(PROP_ADMIN_EMAILS) ?? '';
+  const allowed = adminsRaw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0);
+  if (!allowed.includes(callerEmail)) return { ok: false, error: 'NOT_AUTHORIZED' };
+
+  // Step 2: validate input.
+  const t = input?.template;
+  if (!t) return { ok: false, error: 'INVALID_INPUT', field: 'template', reason: 'required' };
+  if (!t.templateId || t.templateId.length > MAX_ID_FIELD)
+    return { ok: false, error: 'INVALID_INPUT', field: 'templateId', reason: `required, max ${MAX_ID_FIELD} chars` };
+  if (!t.name || t.name.trim().length === 0 || t.name.length > MAX_TEMPLATE_NAME)
+    return { ok: false, error: 'INVALID_INPUT', field: 'name', reason: `required, max ${MAX_TEMPLATE_NAME} chars` };
+  if (typeof t.preamble !== 'string' || t.preamble.length > MAX_PREAMBLE)
+    return { ok: false, error: 'INVALID_INPUT', field: 'preamble', reason: `max ${MAX_PREAMBLE} chars` };
+  if (typeof t.credits !== 'string' || t.credits.length > MAX_CREDITS)
+    return { ok: false, error: 'INVALID_INPUT', field: 'credits', reason: `max ${MAX_CREDITS} chars` };
+  if (!Array.isArray(t.sections) || t.sections.length > MAX_SECTIONS_PER_TEMPLATE)
+    return { ok: false, error: 'INVALID_INPUT', field: 'sections', reason: `max ${MAX_SECTIONS_PER_TEMPLATE} sections` };
+
+  const sectionIds = new Set<string>();
+  const sectionOrders = new Set<number>();
+  for (const s of t.sections) {
+    if (!s.id) return { ok: false, error: 'INVALID_INPUT', field: 'sections', reason: 'each section requires an id' };
+    if (sectionIds.has(s.id)) return { ok: false, error: 'INVALID_INPUT', field: 'sections', reason: 'duplicate section id' };
+    sectionIds.add(s.id);
+    if (typeof s.title !== 'string' || s.title.length > MAX_SECTION_TITLE)
+      return { ok: false, error: 'INVALID_INPUT', field: 'sections', reason: `section title max ${MAX_SECTION_TITLE} chars` };
+    if (typeof s.callToAir !== 'string' || s.callToAir.length > MAX_SECTION_CALL_TO_AIR)
+      return { ok: false, error: 'INVALID_INPUT', field: 'sections', reason: `section callToAir max ${MAX_SECTION_CALL_TO_AIR} chars` };
+    if (typeof s.notes !== 'string' || s.notes.length > MAX_SECTION_NOTES)
+      return { ok: false, error: 'INVALID_INPUT', field: 'sections', reason: `section notes max ${MAX_SECTION_NOTES} chars` };
+    if (!Number.isInteger(s.order) || s.order < 1)
+      return { ok: false, error: 'INVALID_INPUT', field: 'sections', reason: 'section order must be a positive integer' };
+    if (sectionOrders.has(s.order)) return { ok: false, error: 'INVALID_INPUT', field: 'sections', reason: 'duplicate section order' };
+    sectionOrders.add(s.order);
+  }
+
+  // Step 3: acquire lock.
+  const result = withLock<SaveTemplateResult>(() => {
+    const ss = getSpreadsheetOrNull();
+    if (!ss) return { ok: false, error: 'NOT_CONFIGURED' as const };
+    const sheet = getSheetOrNull(ss, SHEET_TEMPLATES);
+    if (!sheet) return { ok: false, error: 'NOT_CONFIGURED' as const };
+
+    // Step 4: load all rows.
+    const allValues = sheet.getDataRange().getValues();
+
+    // Step 5: detect create vs. update; block recycling of soft-deleted IDs.
+    let activeRowIdx = -1;
+    let softDeletedExists = false;
+    for (let i = 1; i < allValues.length; i++) {
+      const rowId = String(allValues[i][TemplatesCol.TemplateId] ?? '');
+      if (rowId !== t.templateId) continue;
+      const deletedAt = String(allValues[i][TemplatesCol.DeletedAt] ?? '').trim();
+      if (deletedAt) { softDeletedExists = true; } else { activeRowIdx = i + 1; } // 1-based
+    }
+    if (softDeletedExists && activeRowIdx < 0) {
+      return { ok: false, error: 'INVALID_INPUT', field: 'templateId', reason: 'ID belongs to a deleted template; generate a new UUID' };
+    }
+    const isCreate = activeRowIdx < 0;
+
+    // Step 6: IsDefault enforcement.
+    if (t.isDefault) {
+      // Clear IsDefault on all other non-deleted rows.
+      for (let i = 1; i < allValues.length; i++) {
+        const rowId = String(allValues[i][TemplatesCol.TemplateId] ?? '');
+        const deletedAt = String(allValues[i][TemplatesCol.DeletedAt] ?? '').trim();
+        if (deletedAt || rowId === t.templateId) continue;
+        const curDefault = allValues[i][TemplatesCol.IsDefault];
+        if (curDefault === true || String(curDefault).toUpperCase() === 'TRUE') {
+          updateCells(sheet, i + 1, { [TemplatesCol.IsDefault + 1]: false });
+        }
+      }
+    } else {
+      // Guard: cannot leave the store with no default.
+      if (!isCreate) {
+        // Update path: check if this row currently IS the default and no other is.
+        const curDefault = allValues[activeRowIdx - 1][TemplatesCol.IsDefault];
+        if (curDefault === true || String(curDefault).toUpperCase() === 'TRUE') {
+          const otherDefault = allValues.slice(1).some((r, _idx) => {
+            const rid = String(r[TemplatesCol.TemplateId] ?? '');
+            const del = String(r[TemplatesCol.DeletedAt] ?? '').trim();
+            const def = r[TemplatesCol.IsDefault];
+            return rid !== t.templateId && !del && (def === true || String(def).toUpperCase() === 'TRUE');
+          });
+          if (!otherDefault) {
+            return { ok: false, error: 'INVALID_INPUT', field: 'isDefault', reason: 'Cannot remove the default flag — set another template as default first' };
+          }
+        }
+      } else {
+        // Create path: if no non-deleted template currently has IsDefault, require it here.
+        const anyDefault = allValues.slice(1).some((r) => {
+          const del = String(r[TemplatesCol.DeletedAt] ?? '').trim();
+          const def = r[TemplatesCol.IsDefault];
+          return !del && (def === true || String(def).toUpperCase() === 'TRUE');
+        });
+        if (!anyDefault) {
+          return { ok: false, error: 'INVALID_INPUT', field: 'isDefault', reason: 'No default template exists — set this template as default' };
+        }
+      }
+    }
+
+    // Step 7: write the row.
+    const now = nowIso();
+    const createdAt = isCreate ? now : String(allValues[activeRowIdx - 1][TemplatesCol.CreatedAt] ?? now);
+
+    const row = new Array(TEMPLATES_HEADERS.length).fill('');
+    row[TemplatesCol.TemplateId]   = t.templateId;
+    row[TemplatesCol.Name]         = t.name.trim();
+    row[TemplatesCol.Preamble]     = t.preamble;
+    row[TemplatesCol.SectionsJson] = JSON.stringify(t.sections);
+    row[TemplatesCol.Credits]      = t.credits;
+    row[TemplatesCol.IsDefault]    = t.isDefault;
+    row[TemplatesCol.CreatedAt]    = createdAt;
+    row[TemplatesCol.UpdatedAt]    = now;
+    row[TemplatesCol.UpdatedBy]    = callerEmail;
+    row[TemplatesCol.DeletedAt]    = '';
+
+    if (isCreate) {
+      sheet.appendRow(row);
+    } else {
+      sheet.getRange(activeRowIdx, 1, 1, TEMPLATES_HEADERS.length).setValues([row]);
+    }
+
+    return { ok: true, templateId: t.templateId, updatedAt: now };
+  });
+
+  return result === 'BUSY' ? { ok: false, error: 'BUSY_TRY_AGAIN' } : result;
+}
+
+// ---------------------------------------------------------------------------
+// Slice 4 — deleteTemplate: admin-only soft delete.
+// ---------------------------------------------------------------------------
+
+export function deleteTemplate(templateId: string): DeleteTemplateResult {
+  const callerEmail = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+  if (!callerEmail) return { ok: false, error: 'NOT_AUTHORIZED' };
+  const adminsRaw = PropertiesService.getScriptProperties().getProperty(PROP_ADMIN_EMAILS) ?? '';
+  const allowed = adminsRaw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0);
+  if (!allowed.includes(callerEmail)) return { ok: false, error: 'NOT_AUTHORIZED' };
+
+  if (!templateId || templateId.length > MAX_ID_FIELD)
+    return { ok: false, error: 'INVALID_INPUT', field: 'templateId', reason: 'required' };
+
+  const result = withLock<DeleteTemplateResult>(() => {
+    const ss = getSpreadsheetOrNull();
+    if (!ss) return { ok: false, error: 'NOT_CONFIGURED' as const };
+    const sheet = getSheetOrNull(ss, SHEET_TEMPLATES);
+    if (!sheet) return { ok: false, error: 'NOT_CONFIGURED' as const };
+
+    const allValues = sheet.getDataRange().getValues();
+
+    // Find the active row for this templateId.
+    let targetRowIdx = -1;
+    for (let i = 1; i < allValues.length; i++) {
+      const rowId = String(allValues[i][TemplatesCol.TemplateId] ?? '');
+      const deletedAt = String(allValues[i][TemplatesCol.DeletedAt] ?? '').trim();
+      if (rowId === templateId && !deletedAt) { targetRowIdx = i + 1; break; }
+    }
+    if (targetRowIdx < 0) return { ok: false, error: 'NOT_FOUND' as const };
+
+    const targetRow = allValues[targetRowIdx - 1];
+
+    // Guard: cannot delete the default template.
+    const isDefault = targetRow[TemplatesCol.IsDefault];
+    if (isDefault === true || String(isDefault).toUpperCase() === 'TRUE') {
+      return { ok: false, error: 'INVALID_INPUT', field: 'templateId', reason: 'Cannot delete the default template — set another as default first' };
+    }
+
+    // Guard: cannot delete the sole remaining non-deleted template.
+    const nonDeletedCount = allValues.slice(1).filter((r) => !String(r[TemplatesCol.DeletedAt] ?? '').trim()).length;
+    if (nonDeletedCount <= 1) {
+      return { ok: false, error: 'INVALID_INPUT', field: 'templateId', reason: 'Cannot delete the only remaining template' };
+    }
+
+    updateCells(sheet, targetRowIdx, { [TemplatesCol.DeletedAt + 1]: nowIso() });
+    return { ok: true };
+  });
+
+  return result === 'BUSY' ? { ok: false, error: 'BUSY_TRY_AGAIN' } : result;
 }
