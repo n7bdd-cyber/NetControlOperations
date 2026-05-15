@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>WashCoARES Net Control</title>
+    <title>ActivARES Net Control Operations</title>
     <style>
       /* WCAG-AA contrast; 48px tap targets. */
       * { box-sizing: border-box; }
@@ -162,7 +162,7 @@
       }
       .chip {
         background: #0b69d3; color: #fff; border: none; border-radius: 4px;
-        font-size: 12px; padding: 3px 7px; min-height: 28px; width: auto; margin: 0;
+        font-size: 16px; padding: 6px 10px; min-height: 44px; width: auto; margin: 0;
         cursor: pointer; font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
       }
       .chip:focus { outline: 3px solid #ffbf47; outline-offset: 2px; }
@@ -192,7 +192,7 @@
     <main>
       <!-- ═══ Screen 1: Start ═══ -->
       <section id="screen-start" class="active" aria-labelledby="start-title">
-        <h1 id="start-title">WashCoARES Net Control</h1>
+        <h1 id="start-title">ActivARES Net Control Operations</h1>
         <h2>Start a new net</h2>
 
         <label for="f-date">Net date</label>
@@ -460,7 +460,7 @@
         '{{primaryName}}','{{primaryFrequency}}','{{primaryPlTone}}','{{primaryDescription}}',
         '{{alternateName}}','{{alternateFrequency}}','{{alternatePlTone}}',
         '{{alternateDescription}}','{{alternateNames}}',
-        '{{linkedNames}}','{{linkedFull}}','{{linkedCount}}',
+        '{{linkedNames}}','{{linkedFull}}','{{linkedCount}}','{{linkedCredits}}',
         '{{echolinkNode}}','{{links}}','{{systemName}}',
       ];
 
@@ -949,7 +949,8 @@
           v['linkedFull']  = linked.map(function(l) {
             return l.repeaterName + ' ' + l.frequency + ' / ' + l.plTone;
           }).join(', ');
-          v['linkedCount'] = String(linked.length);
+          v['linkedCount']   = String(linked.length);
+          v['linkedCredits'] = linked.map(function(l) { return l.closingCredit; }).filter(Boolean).join('\n');
 
           var links = system.links;
           var echoEntry = null;
@@ -961,7 +962,7 @@
         } else {
           ['systemName','primaryName','primaryFrequency','primaryPlTone','primaryDescription',
            'alternateName','alternateFrequency','alternatePlTone','alternateDescription','alternateNames',
-           'linkedNames','linkedFull','linkedCount','echolinkNode','links'].forEach(function(k) { v[k] = ''; });
+           'linkedNames','linkedFull','linkedCount','linkedCredits','echolinkNode','links'].forEach(function(k) { v[k] = ''; });
           v['linkedCount'] = '0';
         }
         return v;
