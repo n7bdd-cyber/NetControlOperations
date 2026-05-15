@@ -392,6 +392,7 @@ Example: `"W7XYZ 147.320 MHz / 100.0 Hz, K7ABC 442.325 MHz / 100.0 Hz"`
 | `{{linkedNames}}` | All linked `RepeaterName` values, comma-separated |
 | `{{linkedFull}}` | All linked as "Name Frequency / PlTone", comma-separated |
 | `{{linkedCount}}` | Count of linked entries |
+| `{{linkedCredits}}` | All non-blank `ClosingCredit` values from linked rows, each on its own line |
 
 ### Link entry variables
 
@@ -685,7 +686,7 @@ Chips shown in both Preamble and Credits hint bars:
 {{frequency}}  {{plTone}}  {{repeaterName}}  {{repeaterCredit}}
 {{primaryName}}  {{primaryFrequency}}  {{primaryPlTone}}  {{primaryDescription}}
 {{alternateName}}  {{alternateFrequency}}  {{alternatePlTone}}  {{alternateDescription}}  {{alternateNames}}
-{{linkedNames}}  {{linkedFull}}  {{linkedCount}}
+{{linkedNames}}  {{linkedFull}}  {{linkedCount}}  {{linkedCredits}}
 {{echolinkNode}}  {{links}}  {{systemName}}
 ```
 
