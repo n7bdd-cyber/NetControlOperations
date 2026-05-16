@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: types.ts
- * System Version: 1.0.0 | File Version: 5 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 6 | Date: 2026-05-15
+ *   v6: S5-10 — ICS 309/214 export interfaces and IcsExportResult type added.
  *   v5: S5-3 — OtherEntry interface and GetOthersSnapshotResult type added.
  *   v4: S5-2 — SETTING_NCO_LOCATIONS constant added.
  *   v3: S5-1 — SETTING_NET_TYPES constant; SaveNetTypesResult type added.
@@ -452,6 +453,73 @@ export interface OtherEntry {
 
 export type GetOthersSnapshotResult =
   | { ok: true;  others: OtherEntry[] }
+  | { ok: false; error: 'NOT_CONFIGURED' }
+  | { ok: false; error: 'READ_FAILED' };
+
+// S5-10 — ICS 309 / ICS 214 export.
+
+export interface Ics309Row {
+  dateTime:  string;   // "HH:mm" local
+  from:      string;   // checking-in callsign
+  to:        string;   // NCO callsign
+  frequency: string;   // e.g. "145.450 MHz" or blank
+  mode:      string;   // "FM" for v1
+  message:   string;   // "Check-in" or "Check-in (×N)"
+  remarks:   string;   // name if known, else blank
+}
+
+export interface Ics309Payload {
+  incidentName:       string;
+  opPeriodFrom:       string;  // "MM/DD/YYYY HH:mm"
+  opPeriodTo:         string;
+  radioNetName:       string;
+  operatorName:       string;
+  operatorPosition:   string;
+  operatorCallsign:   string;
+  stationLog:         Ics309Row[];
+  preparedByName:     string;
+  preparedByCallsign: string;
+  preparedByDateTime: string;
+}
+
+export interface Ics214PersonRow {
+  callsign:    string;
+  name:        string;
+  icsPosition: string;
+  homeAgency:  string;
+}
+
+export interface Ics214ActivityRow {
+  dateTime: string;   // "MM/DD/YYYY HH:mm"
+  activity: string;
+}
+
+export interface Ics214Payload {
+  incidentName:       string;
+  opPeriodFrom:       string;
+  opPeriodTo:         string;
+  unitLeaderName:     string;
+  unitLeaderPosition: string;
+  homeAgency:         string;
+  personnel:          Ics214PersonRow[];
+  activityLog:        Ics214ActivityRow[];
+  preparedByName:     string;
+  preparedByCallsign: string;
+  preparedByDateTime: string;
+}
+
+export interface IcsExportPayload {
+  ics309Text: string;       // pre-formatted plain text for <pre>
+  ics214Text: string;
+  ics309:     Ics309Payload;
+  ics214:     Ics214Payload;
+}
+
+export type IcsExportResult =
+  | { ok: true;  payload: IcsExportPayload }
+  | { ok: false; error: 'SESSION_NOT_FOUND' }
+  | { ok: false; error: 'SESSION_NOT_CLOSED' }
+  | { ok: false; error: 'INVALID_INPUT'; field: string; reason: string }
   | { ok: false; error: 'NOT_CONFIGURED' }
   | { ok: false; error: 'READ_FAILED' };
 

@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: scripts/build.mjs
- * System Version: 1.0.0 | File Version: 5 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 6 | Date: 2026-05-15
+ *   v6: S5-10 — getIcsExport shim added.
  *   v5: S5-3 — getOthersSnapshot shim added.
  *   v4: S5-2 — getNcoLocations and recordNcoLocation shims added.
  *   v3: S5-1 — getNetTypes and saveNetTypes shims added.
@@ -98,6 +99,8 @@ async function main() {
         'function recordNcoLocation() { return __app__.recordNcoLocation.apply(this, arguments); }',
         // S5-3 functions.
         'function getOthersSnapshot() { return __app__.getOthersSnapshot.apply(this, arguments); }',
+        // S5-10 functions.
+        'function getIcsExport() { return __app__.getIcsExport.apply(this, arguments); }',
       ].join('\n'),
     },
     target: 'es2020',

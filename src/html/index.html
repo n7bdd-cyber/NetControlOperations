@@ -2,7 +2,9 @@
 <!--
   Project: NetControlOperations
   File: index.html
-  System Version: 1.0.0 | File Version: 19 | Date: 2026-05-15
+  System Version: 1.0.0 | File Version: 20 | Date: 2026-05-15
+    v20: S5-10 — ICS 309/214 export screen; "Export ICS 309/214" button on
+         screen-summary; copyPreText/selectPreText clipboard helpers.
     v19: S5-3 — visitor (Others tab) band3 suffix-tap; gray "visitor" badge on
          candidate buttons; getOthersSnapshot() fired at session start.
     v18: S5-2 UX — arrow-key navigation in location dropdown; Enter to select,
@@ -228,6 +230,13 @@
       .loc-item:hover, .loc-item.focused { background: #e8f0fe; }
       .loc-item-empty { padding: 10px 14px; color: #888; font-size: 15px; font-style: italic; }
 
+      /* ── S5-10: ICS export screen ── */
+      .ics-pre {
+        overflow-x: auto; font-size: 13px; white-space: pre;
+        background: #f4f6f8; padding: 12px; border-radius: 4px;
+        border: 1px solid #ddd; line-height: 1.5; margin-top: 8px;
+      }
+
       /* ── Slice 4: Template editor ── */
       .ed-template-btn {
         display: block; width: 100%; text-align: left;
@@ -435,8 +444,24 @@
         <p><span id="sum-unique">0</span> unique callsigns.</p>
         <p><span id="sum-hours">0</span> hours total (flat 0.5/callsign).</p>
         <a id="btn-open-sheet" href="#" target="_blank" rel="noopener"><button type="button">Open Sheet</button></a>
+        <button id="btn-ics-export" type="button" hidden>Export ICS 309 / 214</button>
         <button id="btn-oops" class="btn-oops" type="button" hidden>Oops! Undo (<span id="oops-countdown">30</span>s)</button>
         <button id="btn-new-net" class="secondary" type="button">Start new net</button>
+      </section>
+
+      <!-- ═══ Screen 4b: ICS 309/214 Export ═══ -->
+      <section id="screen-ics" aria-labelledby="ics-title">
+        <button id="btn-ics-back" class="secondary" type="button">← Back to Summary</button>
+        <h1 id="ics-title">ICS 309 / 214 Export</h1>
+        <p class="small">Screenshot this screen or use the Copy buttons below.</p>
+
+        <h2>ICS 309 — Communications Log</h2>
+        <button id="btn-copy-309" type="button">Copy ICS 309</button>
+        <pre id="ics-309-text" class="ics-pre"></pre>
+
+        <h2>ICS 214 — Activity Log</h2>
+        <button id="btn-copy-214" type="button">Copy ICS 214</button>
+        <pre id="ics-214-text" class="ics-pre"></pre>
       </section>
 
       <!-- ═══ Screen 5: Template editor ═══ -->
@@ -546,6 +571,7 @@
         ncoLocations: [],  // string[] — sorted A-Z, loaded by loadNcoLocations()
         others: [],        // OtherEntry[] — loaded at session start by getOthersSnapshot()
         othersLoaded: false,
+        icsExportPayload: null, // IcsExportPayload | null — set after successful getIcsExport
         // callsign → { checkinId, tapCount, name, resolveAsync, nameSearchFailed }
         checkins: new Map(),
         history: [],
@@ -592,6 +618,7 @@
       var ALL_SCREENS = [
         'screen-start','screen-preamble','screen-log','screen-credits',
         'screen-end','screen-summary','screen-editor',
+        'screen-ics',  // S5-10
       ];
       function showScreen(id) {
         ALL_SCREENS.forEach(function(sid) {
@@ -1600,6 +1627,7 @@
           $('sum-unique').textContent = result.uniqueCallsignCount;
           $('sum-hours').textContent  = result.hoursTotal;
           $('btn-open-sheet').href    = result.spreadsheetUrl;
+          $('btn-ics-export').hidden = false;
           showScreen('screen-summary');
           startOopsCountdown();
         } catch(e) { toast('Network error — try again.'); }
@@ -1621,6 +1649,7 @@
           inFlightStart: null, inFlightCheckin: null,
           roster: [], rosterLoaded: false, rosterLoadError: false,
           others: [], othersLoaded: false,
+          icsExportPayload: null,
           manualNameForm: null,
           activeScript: null, repeaterSystem: null, tonightRepeater: null,
           templates: savedTemplates, repeaterSystems: savedSystems, isAdmin: savedIsAdmin,
@@ -1631,6 +1660,7 @@
         var sel = $('f-net-type-select'); if (sel) sel.value = '';
         var addRow = $('net-type-add-row'); if (addRow) addRow.hidden = true;
         var otherIn = $('f-net-type-other'); if (otherIn) otherIn.hidden = true;
+        var icsBtn = $('btn-ics-export'); if (icsBtn) icsBtn.hidden = true;
         clearAllStartErrors(); initStartDefaults(); stopFccTimer(); stopOopsCountdown();
         // Re-initialize dropdowns with current data.
         if (NetControl.repeaterSystems.length > 0) updateRepeaterSystemDropdown();
@@ -2130,6 +2160,56 @@
       }
 
       // ─────────────────────────────────────────────────────────────────────
+      // S5-10 — ICS 309/214 export
+      // ─────────────────────────────────────────────────────────────────────
+
+      function selectPreText(preId) {
+        var el = $(preId);
+        if (!el) return;
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        var sel = window.getSelection();
+        if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+      }
+
+      function copyPreText(preId) {
+        var el = $(preId);
+        if (!el) return;
+        var text = el.textContent || '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function() {
+            toast('Copied to clipboard.');
+          }).catch(function() {
+            selectPreText(preId);
+            toast('Text selected — press Ctrl+C or long-press to copy.');
+          });
+        } else {
+          selectPreText(preId);
+          toast('Text selected — press Ctrl+C or long-press to copy.');
+        }
+      }
+
+      function onIcsExport() {
+        if (!NetControl.sessionId) return;
+        toast('Generating…');
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (!result || !result.ok) {
+              toast('Export failed: ' + (result && result.error ? result.error : 'unknown'));
+              return;
+            }
+            NetControl.icsExportPayload = result.payload;
+            $('ics-309-text').textContent = result.payload.ics309Text;
+            $('ics-214-text').textContent = result.payload.ics214Text;
+            showScreen('screen-ics');
+          })
+          .withFailureHandler(function() {
+            toast('Export failed — try again.');
+          })
+          .getIcsExport(NetControl.sessionId);
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
       // Page-load: fetch templates, repeater systems, admin status in parallel
       // ─────────────────────────────────────────────────────────────────────
       function initSlice4Data() {
@@ -2284,6 +2364,12 @@
 
         // Screen 4: Summary
         $('btn-new-net').addEventListener('click', onNewNet);
+        $('btn-ics-export').addEventListener('click', onIcsExport);
+
+        // Screen 4b: ICS export
+        $('btn-ics-back').addEventListener('click', function() { showScreen('screen-summary'); });
+        $('btn-copy-309').addEventListener('click', function() { copyPreText('ics-309-text'); });
+        $('btn-copy-214').addEventListener('click', function() { copyPreText('ics-214-text'); });
 
         // FCC ID timer + chip: tap any to reset (screen-log and screen-credits)
         ['fcc-timer', 'fcc-timer-credits', 'fcc-id-chip', 'fcc-id-chip-credits'].forEach(function(id) {

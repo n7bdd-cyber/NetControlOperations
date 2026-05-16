@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: main.ts
- * System Version: 1.0.0 | File Version: 10 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 11 | Date: 2026-05-15
+ *   v11: S5-10 — getIcsExport() builds ICS 309 and ICS 214 plain-text reports.
  *   v10: S5-3 — getOthersSnapshot() for visitor band3 suffix-tap.
  *   v9: S5-2 UX — location list cap raised from 20 to 50.
  *   v8: S5-2 — getNcoLocations() + recordNcoLocation() for location autocomplete.
@@ -110,6 +111,13 @@ import {
   type GetRepeaterSystemsResult,
   type GetOthersSnapshotResult,
   type GetRosterSnapshotResult,
+  type Ics309Row,
+  type Ics309Payload,
+  type Ics214PersonRow,
+  type Ics214ActivityRow,
+  type Ics214Payload,
+  type IcsExportPayload,
+  type IcsExportResult,
   type GetTemplatesResult,
   type NetTemplate,
   type ReconcileResult,
@@ -702,6 +710,260 @@ export function getOthersSnapshot(): GetOthersSnapshotResult {
   }
 
   return { ok: true, others };
+}
+
+// ---------------------------------------------------------------------------
+// S5-10 — getIcsExport: builds ICS 309 and ICS 214 plain-text reports from a
+// closed session's Sessions + Checkins + Repeaters data. Read-only, no lock.
+// ---------------------------------------------------------------------------
+
+// Fixed-width column padding — truncates with '…' if over width.
+function padCol(s: string, width: number): string {
+  if (s.length >= width) return s.slice(0, width - 1) + '…';
+  return s.padEnd(width);
+}
+
+function formatIcs309(p: Ics309Payload): string {
+  const lines = [
+    'ICS 309 — COMMUNICATIONS LOG',
+    '=============================',
+    `Incident Name:      ${p.incidentName}`,
+    `Op Period From:     ${p.opPeriodFrom}`,
+    `Op Period To:       ${p.opPeriodTo}`,
+    `Radio Net Name:     ${p.radioNetName}`,
+    `Operator:           ${p.operatorName} / ${p.operatorCallsign} / ${p.operatorPosition}`,
+    '',
+    'TIME   FROM         TO           FREQ           MODE  MESSAGE             REMARKS',
+    '------ ------------ ------------ -------------- ----- ------------------- --------------------',
+  ];
+  if (p.stationLog.length === 0) {
+    lines.push('(no check-ins)');
+  } else {
+    p.stationLog.forEach((row: Ics309Row) => {
+      lines.push(
+        padCol(row.dateTime,  6)  + ' ' +
+        padCol(row.from,     12)  + ' ' +
+        padCol(row.to,       12)  + ' ' +
+        padCol(row.frequency, 14) + ' ' +
+        padCol(row.mode,      5)  + ' ' +
+        padCol(row.message,  19)  + ' ' +
+        row.remarks.slice(0, 20),
+      );
+    });
+  }
+  lines.push('');
+  lines.push(`Prepared by: ${p.preparedByName} / ${p.preparedByCallsign}   Date/Time: ${p.preparedByDateTime}`);
+  return lines.join('\n');
+}
+
+function formatIcs214(p: Ics214Payload): string {
+  const lines = [
+    'ICS 214 — ACTIVITY LOG',
+    '=======================',
+    `Incident Name:      ${p.incidentName}`,
+    `Op Period From:     ${p.opPeriodFrom}`,
+    `Op Period To:       ${p.opPeriodTo}`,
+    `Unit Leader:        ${p.unitLeaderName} / ${p.preparedByCallsign} / ${p.unitLeaderPosition}`,
+    `Home Agency:        ${p.homeAgency}`,
+    '',
+    'PERSONNEL ROSTER',
+    'CALLSIGN     NAME                     ICS POSITION           HOME AGENCY',
+    '------------ ------------------------ ---------------------- -------------------------',
+  ];
+  if (p.personnel.length === 0) {
+    lines.push('(no personnel)');
+  } else {
+    p.personnel.forEach((row: Ics214PersonRow) => {
+      lines.push(
+        padCol(row.callsign,    12) + ' ' +
+        padCol(row.name,        24) + ' ' +
+        padCol(row.icsPosition, 22) + ' ' +
+        row.homeAgency.slice(0, 25),
+      );
+    });
+  }
+  lines.push('');
+  lines.push('ACTIVITY LOG');
+  lines.push('DATE/TIME            NOTABLE ACTIVITIES');
+  lines.push('-------------------- -------------------------------------------------------');
+  p.activityLog.forEach((row: Ics214ActivityRow) => {
+    lines.push(padCol(row.dateTime, 20) + ' ' + row.activity);
+  });
+  lines.push('');
+  lines.push(`Prepared by: ${p.preparedByName} / ${p.preparedByCallsign}   Date/Time: ${p.preparedByDateTime}`);
+  return lines.join('\n');
+}
+
+export function getIcsExport(sessionId: string): IcsExportResult {
+  if (!sessionId || !isValidIdField(sessionId, MAX_ID_FIELD)) {
+    return { ok: false, error: 'INVALID_INPUT', field: 'sessionId', reason: 'missing or too long' };
+  }
+
+  const ss = getSpreadsheetOrNull();
+  if (!ss) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  // --- Sessions row ---
+  const sessionsSheet = getSheetOrNull(ss, SHEET_SESSIONS);
+  if (!sessionsSheet) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  let sessRow: unknown[] | null;
+  try {
+    sessRow = findRowData(sessionsSheet, (row) => String(row[SessionsCol.SessionID]) === sessionId);
+  } catch (e) {
+    Logger.log(`getIcsExport: sessions read threw: ${String(e)}`);
+    return { ok: false, error: 'READ_FAILED' };
+  }
+  if (!sessRow) return { ok: false, error: 'SESSION_NOT_FOUND' };
+  if (String(sessRow[SessionsCol.Status]) !== SESSION_STATUS_CLOSED) {
+    return { ok: false, error: 'SESSION_NOT_CLOSED' };
+  }
+
+  const incidentName     = String(sessRow[SessionsCol.NetType]        ?? '').trim();
+  const ncoCallsign      = String(sessRow[SessionsCol.NCOCallsign]    ?? '').trim();
+  const ncoName          = String(sessRow[SessionsCol.NCOName]        ?? '').trim();
+  const repeaterSystem   = String(sessRow[SessionsCol.RepeaterSystem] ?? '').trim();
+  const repeaterFreeText = String(sessRow[SessionsCol.Repeater]       ?? '').trim();
+  const startTimestamp   = String(sessRow[SessionsCol.StartTimestamp] ?? '').trim();
+  const endTimestamp     = String(sessRow[SessionsCol.EndTimestamp]   ?? '').trim();
+
+  // --- Repeater frequency ---
+  let frequency = '';
+  if (repeaterSystem) {
+    const repSheet = getSheetOrNull(ss, SHEET_REPEATERS);
+    if (repSheet) {
+      const repRow = findRowData(repSheet, (row) =>
+        String(row[RepeatersCol.SystemName]) === repeaterSystem &&
+        String(row[RepeatersCol.Type]).toLowerCase() === 'primary' &&
+        (row[RepeatersCol.IsActive] === true || String(row[RepeatersCol.IsActive]).toLowerCase() === 'true'),
+      );
+      if (repRow) frequency = String(repRow[RepeatersCol.Frequency] ?? '').trim();
+    }
+  } else if (repeaterFreeText) {
+    frequency = repeaterFreeText;
+  }
+
+  // --- Checkins rows ---
+  const checkinsSheet = getSheetOrNull(ss, SHEET_CHECKINS);
+  let sessionCheckins: unknown[][] = [];
+  if (checkinsSheet) {
+    let all: unknown[][];
+    try {
+      all = checkinsSheet.getDataRange().getValues();
+    } catch (e) {
+      Logger.log(`getIcsExport: checkins read threw: ${String(e)}`);
+      return { ok: false, error: 'READ_FAILED' };
+    }
+    sessionCheckins = all.slice(1).filter((row) => String(row[CheckinsCol.SessionID]) === sessionId);
+    sessionCheckins.sort((a, b) => {
+      const ta = String(a[CheckinsCol.FirstTimestamp] ?? '');
+      const tb = String(b[CheckinsCol.FirstTimestamp] ?? '');
+      if (ta < tb) return -1;
+      if (ta > tb) return 1;
+      const ca = String(a[CheckinsCol.Callsign] ?? '');
+      const cb = String(b[CheckinsCol.Callsign] ?? '');
+      return ca < cb ? -1 : ca > cb ? 1 : 0;
+    });
+  }
+
+  // --- Timestamp helpers ---
+  const tz = Session.getScriptTimeZone();
+  const fmtDT = (iso: string): string => {
+    if (!iso) return '';
+    try { return Utilities.formatDate(new Date(iso), tz, 'MM/dd/yyyy HH:mm'); } catch (_) { return iso; }
+  };
+  const fmtT = (iso: string): string => {
+    if (!iso) return '';
+    try { return Utilities.formatDate(new Date(iso), tz, 'HH:mm'); } catch (_) { return iso; }
+  };
+
+  const opPeriodFrom = fmtDT(startTimestamp);
+  const opPeriodTo   = fmtDT(endTimestamp);
+  const prepDateTime = fmtDT(endTimestamp);
+
+  // --- ICS 309 station log ---
+  const stationLog: Ics309Row[] = sessionCheckins.map((row) => {
+    const tapCount = Number(row[CheckinsCol.TapCount] ?? 1) || 1;
+    return {
+      dateTime:  fmtT(String(row[CheckinsCol.FirstTimestamp] ?? '')),
+      from:      String(row[CheckinsCol.Callsign] ?? '').trim(),
+      to:        ncoCallsign,
+      frequency,
+      mode:      'FM',
+      message:   tapCount > 1 ? `Check-in (×${tapCount})` : 'Check-in',
+      remarks:   String(row[CheckinsCol.Name] ?? '').trim(),
+    };
+  });
+
+  const ics309: Ics309Payload = {
+    incidentName,
+    opPeriodFrom,
+    opPeriodTo,
+    radioNetName:       incidentName,
+    operatorName:       ncoName,
+    operatorPosition:   'Net Control Operator',
+    operatorCallsign:   ncoCallsign,
+    stationLog,
+    preparedByName:     ncoName,
+    preparedByCallsign: ncoCallsign,
+    preparedByDateTime: prepDateTime,
+  };
+
+  // --- ICS 214 personnel roster (unique callsigns, sorted A-Z) ---
+  const seenCs = new Map<string, string>(); // callsign → name
+  sessionCheckins.forEach((row) => {
+    const cs   = String(row[CheckinsCol.Callsign] ?? '').trim();
+    const name = String(row[CheckinsCol.Name]     ?? '').trim();
+    if (cs && !seenCs.has(cs)) seenCs.set(cs, name);
+  });
+
+  const HOME_AGENCY = 'Washington County ARES';
+  const personnel: Ics214PersonRow[] = Array.from(seenCs.entries())
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([cs, name]) => ({
+      callsign:    cs,
+      name,
+      icsPosition: cs === ncoCallsign ? 'Net Control Operator' : 'Net Member',
+      homeAgency:  HOME_AGENCY,
+    }));
+
+  const uniqueCount   = seenCs.size;
+  const totalCheckins = sessionCheckins.reduce((s, row) => s + (Number(row[CheckinsCol.TapCount] ?? 1) || 1), 0);
+  const hours         = (uniqueCount * 0.5).toFixed(1);
+  const freqDisplay   = frequency || 'not recorded';
+
+  const activityLog: Ics214ActivityRow[] = [
+    {
+      dateTime: fmtDT(startTimestamp),
+      activity: `Net opened. NCO: ${ncoCallsign}. Repeater: ${freqDisplay}.`,
+    },
+    {
+      dateTime: fmtDT(endTimestamp),
+      activity: `Net closed. ${uniqueCount} unique stations checked in. Total check-ins (including re-taps): ${totalCheckins}. Estimated service hours: ${hours}.`,
+    },
+  ];
+
+  const ics214: Ics214Payload = {
+    incidentName,
+    opPeriodFrom,
+    opPeriodTo,
+    unitLeaderName:     ncoName,
+    unitLeaderPosition: 'Net Control Operator',
+    homeAgency:         HOME_AGENCY,
+    personnel,
+    activityLog,
+    preparedByName:     ncoName,
+    preparedByCallsign: ncoCallsign,
+    preparedByDateTime: prepDateTime,
+  };
+
+  const payload: IcsExportPayload = {
+    ics309Text: formatIcs309(ics309),
+    ics214Text: formatIcs214(ics214),
+    ics309,
+    ics214,
+  };
+
+  return { ok: true, payload };
 }
 
 // ---------------------------------------------------------------------------
