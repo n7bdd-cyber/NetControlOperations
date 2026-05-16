@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: main.ts
- * System Version: 1.0.0 | File Version: 6 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 7 | Date: 2026-05-15
+ *   v7: S5-1 — getNetTypes() + saveNetTypes() for Settings-driven net type dropdown.
  *   v6: Performance — roster + Others lookups in recordCheckin use findRowData()
  *       to eliminate the extra readRow() Sheets API call after findRowIndex().
  *   v5: Bug fix — dedup response in recordCheckin now returns the stored name
@@ -33,6 +34,8 @@
  *   getRepeaterSystems()             — active repeater systems grouped by name
  *   saveTemplate(input)              — create or update a NetTemplate row
  *   deleteTemplate(templateId)       — soft-deletes a template (sets DeletedAt)
+ *   getNetTypes()                    — reads NET_TYPES from Settings; returns string[]
+ *   saveNetTypes(types)              — admin-only; writes NET_TYPES to Settings
  *
  * Build: `npm run build` → esbuild bundles this + deps → dist/Code.gs.
  *        scripts/build.mjs hoists exports onto global for Apps Script.
@@ -84,6 +87,7 @@ import {
   SessionsCol,
   SESSION_STATUS_CLOSED,
   SESSION_STATUS_OPEN,
+  SETTING_NET_TYPES,
   SHEET_CHECKINS,
   SHEET_OTHERS,
   SHEET_REPEATERS,
@@ -110,6 +114,7 @@ import {
   type RepeaterSystem,
   type ResolveNameResult,
   type RosterEntry,
+  type SaveNetTypesResult,
   type SaveTemplateInput,
   type SaveTemplateResult,
   type SetupSheetsResult,
@@ -1535,6 +1540,84 @@ export function deleteTemplate(templateId: string): DeleteTemplateResult {
     }
 
     updateCells(sheet, targetRowIdx, { [TemplatesCol.DeletedAt + 1]: nowIso() });
+    return { ok: true };
+  });
+
+  return result === 'BUSY' ? { ok: false, error: 'BUSY_TRY_AGAIN' } : result;
+}
+
+// ---------------------------------------------------------------------------
+// S5-1 — getNetTypes: read the NET_TYPES Settings row; return string[].
+// No lock needed — read-only. Empty array on any error so the client
+// degrades gracefully to an "Other…"-only dropdown.
+// ---------------------------------------------------------------------------
+
+export function getNetTypes(): string[] {
+  const ss = getSpreadsheetOrNull();
+  if (!ss) return [];
+
+  const settings = getSheetOrNull(ss, SHEET_SETTINGS);
+  if (!settings) return [];
+
+  const row = findRowData(settings, (r) => String(r[0]) === SETTING_NET_TYPES);
+  if (!row) return [];
+
+  const raw = String(row[1] ?? '').trim();
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((t): t is string => typeof t === 'string' && t.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// S5-1 — saveNetTypes: admin-only; writes the NET_TYPES Settings row.
+// Validates: ≤ 50 entries, each ≤ MAX_NET_TYPE chars, no empty strings.
+// '*' is allowed — the client uses it as a wildcard to show "Other…"
+// to all NCOs (admin's way of crowdsourcing new type ideas).
+// ---------------------------------------------------------------------------
+
+export function saveNetTypes(types: string[]): SaveNetTypesResult {
+  const callerEmail = (Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+  if (!callerEmail) return { ok: false, error: 'NOT_AUTHORIZED' };
+  const adminsRaw = PropertiesService.getScriptProperties().getProperty(PROP_ADMIN_EMAILS) ?? '';
+  const allowed = adminsRaw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0);
+  if (!allowed.includes(callerEmail)) return { ok: false, error: 'NOT_AUTHORIZED' };
+
+  if (!Array.isArray(types)) {
+    return { ok: false, error: 'INVALID_INPUT', field: 'types', reason: 'must be an array' };
+  }
+  if (types.length > 50) {
+    return { ok: false, error: 'INVALID_INPUT', field: 'types', reason: 'max 50 entries' };
+  }
+  for (const t of types) {
+    if (typeof t !== 'string' || t.trim().length === 0) {
+      return { ok: false, error: 'INVALID_INPUT', field: 'types', reason: 'empty or non-string entry' };
+    }
+    if (t.length > MAX_NET_TYPE) {
+      return { ok: false, error: 'INVALID_INPUT', field: 'types', reason: `entry exceeds ${MAX_NET_TYPE} chars` };
+    }
+  }
+
+  const result = withLock<SaveNetTypesResult>(() => {
+    const ss = getSpreadsheetOrNull();
+    if (!ss) return { ok: false, error: 'NOT_CONFIGURED' as const };
+
+    const settings = getSheetOrNull(ss, SHEET_SETTINGS);
+    if (!settings) return { ok: false, error: 'NOT_CONFIGURED' as const };
+
+    const json = JSON.stringify(types);
+    const rowIdx = findRowIndex(settings, (r) => String(r[0]) === SETTING_NET_TYPES);
+    if (rowIdx > 0) {
+      // Column 2 (1-indexed) = Value.
+      updateCells(settings, rowIdx, { 2: json });
+    } else {
+      appendRowAndGetIndex(settings, [SETTING_NET_TYPES, json]);
+    }
     return { ok: true };
   });
 

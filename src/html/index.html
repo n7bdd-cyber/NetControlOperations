@@ -2,7 +2,15 @@
 <!--
   Project: NetControlOperations
   File: index.html
-  System Version: 1.0.0 | File Version: 9 | Date: 2026-05-15
+  System Version: 1.0.0 | File Version: 12 | Date: 2026-05-15
+    v12: S5-1 bug fix — Add button stayed disabled after first successful add
+         because btn.disabled=true was never reset on the success path; fixed by
+         re-enabling on success and defensively re-enabling when row is shown.
+    v11: S5-1 layout — NCO callsign and name moved before net type so last-used
+         pre-selection fires as the NCO tabs into the net type field.
+    v10: S5-1 — Net type free-text input replaced by Settings-driven <select>;
+         admin "Add a type…" inline form; per-NCO last-used pre-selection via
+         localStorage; * wildcard in NET_TYPES exposes Other… to all NCOs.
     v9: Bug fix — applyCheckinResult applies name from dedup response when entry
         has no name yet (covers callWithRetry retry-after-timeout scenario).
     v8: Layout fix — header strip moved above script panel on check-in page.
@@ -249,16 +257,28 @@
         <input id="f-time" type="time" required />
         <p id="e-time" class="field-error" role="alert"></p>
 
-        <label for="f-net-type">Net type</label>
-        <input id="f-net-type" type="text" maxlength="100" required />
-        <p id="e-net-type" class="field-error" role="alert"></p>
-
         <label for="f-nco">NCO callsign</label>
         <input id="f-nco" type="text" maxlength="18" autocapitalize="characters" autocomplete="off" required />
         <p id="e-nco" class="field-error" role="alert"></p>
 
         <label for="f-nco-name">Your name</label>
         <input id="f-nco-name" type="text" maxlength="100" autocomplete="name" />
+
+        <label for="f-net-type-select">Net type</label>
+        <select id="f-net-type-select" required>
+          <option value="">— select net type —</option>
+          <option id="opt-other-type" value="__other__">Other…</option>
+          <option id="opt-add-type" value="__add__" hidden>Add a type…</option>
+        </select>
+        <input id="f-net-type-other" type="text" maxlength="100" placeholder="Type net name…"
+               hidden aria-label="Net type (free text)" />
+        <div id="net-type-add-row" class="row-controls" hidden>
+          <input id="f-net-type-new" type="text" maxlength="100" placeholder="New net type…"
+                 aria-label="New net type name" />
+          <button id="btn-net-type-add" type="button" class="secondary">Add</button>
+          <button id="btn-net-type-cancel-add" type="button" class="secondary">Cancel</button>
+        </div>
+        <p id="e-net-type" class="field-error" role="alert"></p>
 
         <label for="f-nco-location">Your location</label>
         <input id="f-nco-location" type="text" maxlength="100" />
@@ -485,6 +505,7 @@
         sessionId: null,
         netType: '', ncoCallsign: '', netTime: '',
         ncoName: '', ncoLocation: '',
+        netTypes: [],   // string[] — loaded once on page load by loadNetTypes()
         // callsign → { checkinId, tapCount, name, resolveAsync, nameSearchFailed }
         checkins: new Map(),
         history: [],
@@ -1344,10 +1365,16 @@
           ? (NetControl.templates.find(function(t) { return t.templateId === scriptId; }) || null)
           : null;
 
+        var selEl = $('f-net-type-select');
+        var selVal = selEl ? selEl.value : '';
+        var netTypeValue = (selVal === '__other__')
+          ? ($('f-net-type-other').value || '').trim()
+          : selVal;
+
         var input = {
           date: $('f-date').value,
           time: $('f-time').value,
-          netType: $('f-net-type').value.trim(),
+          netType: netTypeValue,
           ncoCallsign: $('f-nco').value.trim().toUpperCase(),
           repeater: (!system) ? $('f-repeater').value : '',
           purposeNotes: $('f-notes').value,
@@ -1383,6 +1410,8 @@
           NetControl.netTime = input.time;
           NetControl.ncoName = input.ncoName;
           NetControl.ncoLocation = input.ncoLocation;
+          // Remember this NCO's last-used net type for pre-selection next session.
+          try { localStorage.setItem('lastNetType_' + input.ncoCallsign, input.netType); } catch(e) {}
           NetControl.repeaterSystem = system;
           NetControl.tonightRepeater = tonightRepeater;
           NetControl.inFlightStart = null;
@@ -1504,9 +1533,11 @@
         var savedTemplates = NetControl.templates;
         var savedSystems   = NetControl.repeaterSystems;
         var savedIsAdmin   = NetControl.isAdmin;
+        var savedNetTypes  = NetControl.netTypes;
         NetControl = {
           sessionId: null, netType: '', ncoCallsign: '', netTime: '',
           ncoName: '', ncoLocation: '',
+          netTypes: savedNetTypes,
           checkins: new Map(), history: [],
           inFlightStart: null, inFlightCheckin: null,
           roster: [], rosterLoaded: false, rosterLoadError: false,
@@ -1514,9 +1545,12 @@
           activeScript: null, repeaterSystem: null, tonightRepeater: null,
           templates: savedTemplates, repeaterSystems: savedSystems, isAdmin: savedIsAdmin,
         };
-        ['f-net-type','f-nco','f-nco-name','f-nco-location','f-repeater','f-notes','f-callsign'].forEach(function(id) {
+        ['f-net-type-other','f-nco','f-nco-name','f-nco-location','f-repeater','f-notes','f-callsign'].forEach(function(id) {
           var el = $(id); if (el) el.value = '';
         });
+        var sel = $('f-net-type-select'); if (sel) sel.value = '';
+        var addRow = $('net-type-add-row'); if (addRow) addRow.hidden = true;
+        var otherIn = $('f-net-type-other'); if (otherIn) otherIn.hidden = true;
         clearAllStartErrors(); initStartDefaults(); stopFccTimer(); stopOopsCountdown();
         // Re-initialize dropdowns with current data.
         if (NetControl.repeaterSystems.length > 0) updateRepeaterSystemDropdown();
@@ -1817,6 +1851,120 @@
       }
 
       // ─────────────────────────────────────────────────────────────────────
+      // S5-1 — Net type dropdown helpers
+      // ─────────────────────────────────────────────────────────────────────
+
+      function loadNetTypes() {
+        callServer('getNetTypes', {}).then(function(types) {
+          NetControl.netTypes = Array.isArray(types) ? types : [];
+          rebuildNetTypeSelect();
+        }).catch(function() {
+          NetControl.netTypes = [];
+          rebuildNetTypeSelect();
+        });
+      }
+
+      function rebuildNetTypeSelect() {
+        var sel = $('f-net-type-select');
+        if (!sel) return;
+        // Remove dynamically-inserted type options (keep blank, __other__, __add__).
+        var toRemove = [];
+        for (var i = 0; i < sel.options.length; i++) {
+          var v = sel.options[i].value;
+          if (v !== '' && v !== '__other__' && v !== '__add__') toRemove.push(sel.options[i]);
+        }
+        toRemove.forEach(function(o) { sel.removeChild(o); });
+
+        // Insert named types before the __other__ option.
+        var otherOpt = $('opt-other-type');
+        var displayTypes = NetControl.netTypes.filter(function(t) { return t !== '*'; });
+        displayTypes.forEach(function(t) {
+          var opt = document.createElement('option');
+          opt.value = t; opt.textContent = t;
+          sel.insertBefore(opt, otherOpt);
+        });
+
+        // "Other…" is visible when: * in list, list is empty, or user is admin.
+        var hasWildcard = NetControl.netTypes.indexOf('*') >= 0;
+        var isEmpty = displayTypes.length === 0;
+        otherOpt.hidden = !(hasWildcard || isEmpty || NetControl.isAdmin);
+
+        // "Add a type…" visible only for admins.
+        $('opt-add-type').hidden = !NetControl.isAdmin;
+
+        // Apply callsign-based last-used default if callsign is already filled.
+        applyLastUsedNetType();
+      }
+
+      function applyLastUsedNetType() {
+        var callsign = ($('f-nco') ? $('f-nco').value : '').trim().toUpperCase();
+        if (!callsign) return;
+        var last;
+        try { last = localStorage.getItem('lastNetType_' + callsign); } catch(e) { return; }
+        if (!last) return;
+        var sel = $('f-net-type-select');
+        if (!sel || sel.value) return; // already has a selection
+        // Try to find the exact option.
+        for (var i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value === last) {
+            sel.value = last;
+            $('f-net-type-other').hidden = true;
+            return;
+          }
+        }
+        // Not in list — offer it as an "Other…" entry if that option is visible.
+        var otherOpt = $('opt-other-type');
+        if (otherOpt && !otherOpt.hidden) {
+          sel.value = '__other__';
+          var otherIn = $('f-net-type-other');
+          otherIn.hidden = false;
+          otherIn.value = last;
+        }
+      }
+
+      function onNetTypeSelectChange() {
+        var val = $('f-net-type-select').value;
+        $('f-net-type-other').hidden = val !== '__other__';
+        if (val === '__add__') {
+          $('f-net-type-select').value = '';    // reset so select reads as blank
+          $('net-type-add-row').hidden = false;
+          var addBtn = $('btn-net-type-add'); if (addBtn) addBtn.disabled = false;
+          setTimeout(function() { var f = $('f-net-type-new'); if (f) f.focus(); }, 0);
+        } else {
+          $('net-type-add-row').hidden = true;
+        }
+      }
+
+      function onNetTypeAdd() {
+        var newType = ($('f-net-type-new').value || '').trim();
+        if (!newType) { toast('Please type a net type name.'); return; }
+        if (newType.length > 100) { toast('Net type too long (max 100 characters).'); return; }
+        var btn = $('btn-net-type-add');
+        if (btn) btn.disabled = true;
+        var updated = NetControl.netTypes.concat([newType]);
+        callServer('saveNetTypes', updated).then(function(result) {
+          if (!result || !result.ok) {
+            toast('Could not save: ' + (result && result.error ? result.error : 'unknown'));
+            if (btn) btn.disabled = false;
+            return;
+          }
+          toast('Net type added.');
+          if (btn) btn.disabled = false;
+          $('net-type-add-row').hidden = true;
+          $('f-net-type-new').value = '';
+          loadNetTypes();    // refresh dropdown from server
+        }).catch(function() {
+          toast('Network error — try again.');
+          if (btn) btn.disabled = false;
+        });
+      }
+
+      function onNetTypeAddCancel() {
+        $('net-type-add-row').hidden = true;
+        $('f-net-type-new').value = '';
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
       // Page-load: fetch templates, repeater systems, admin status in parallel
       // ─────────────────────────────────────────────────────────────────────
       function initSlice4Data() {
@@ -1853,10 +2001,14 @@
           $('repeater-other-row').hidden = false;
         });
 
-        // Admin status
+        // Net types (S5-1)
+        loadNetTypes();
+
+        // Admin status — also refreshes net type dropdown admin options when resolved.
         google.script.run
           .withSuccessHandler(function(isAdmin) {
             NetControl.isAdmin = isAdmin === true;
+            rebuildNetTypeSelect(); // show/hide "Add a type…" and "Other…" now that admin is known
           })
           .withFailureHandler(function() { NetControl.isAdmin = false; })
           .getAdminStatus();
@@ -1875,6 +2027,17 @@
         $('btn-open-editor').addEventListener('click', openEditor);
 
         $('f-repeater-system').addEventListener('change', onRepeaterSystemChange);
+
+        // S5-1: Net type select + inline add form
+        $('f-net-type-select').addEventListener('change', onNetTypeSelectChange);
+        $('btn-net-type-add').addEventListener('click', onNetTypeAdd);
+        $('btn-net-type-cancel-add').addEventListener('click', onNetTypeAddCancel);
+        $('f-net-type-new').addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') { e.preventDefault(); onNetTypeAdd(); }
+          if (e.key === 'Escape') { e.preventDefault(); onNetTypeAddCancel(); }
+        });
+        // Pre-select last-used net type when NCO callsign is entered.
+        $('f-nco').addEventListener('blur', applyLastUsedNetType);
 
         // Screen 1b: Preamble
         $('btn-begin-net').addEventListener('click', onBeginNet);

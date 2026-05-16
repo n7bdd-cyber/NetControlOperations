@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: types.ts
- * System Version: 1.0.0 | File Version: 2 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 3 | Date: 2026-05-15
+ *   v3: S5-1 — SETTING_NET_TYPES constant; SaveNetTypesResult type added.
  *   v2: S5-7 — ReopenSessionInput and ReopenSessionResult added.
  *   v1: Initial version tracking. All sheet schemas, column-index constants,
  *       and result interfaces for Slices 1–4 (including Repeaters / Templates).
@@ -13,6 +14,7 @@
  *     TemplatesCol, RepeatersCol
  *   Tab name constants: SHEET_SESSIONS … SHEET_REPEATERS
  *   Script property keys: PROP_SPREADSHEET_ID, PROP_ADMIN_EMAILS, etc.
+ *   Settings value keys: SETTING_NET_TYPES
  *   MAX_* length caps; SESSION_STATUS_* constants; SOURCE_MANUAL
  *   Interfaces: OthersEntry, TemplateSection, NetTemplate, RepeaterEntry,
  *     RepeaterSystem, RosterEntry, StartSessionInput, RecordCheckinInput,
@@ -191,6 +193,12 @@ export const PROP_ADMIN_EMAILS = 'AdminEmails';
 export const PROP_CALLOOK_BASE_URL = 'CallookBaseUrl';
 export const PROP_TRUSTEE_EMAIL = 'TrusteeEmail';
 export const PROP_ROSTER_CSV_DRIVE_FOLDER_ID = 'RosterCsvDriveFolderId';
+
+// ---------------------------------------------------------------------------
+// Settings tab value keys (Key column in the Settings sheet).
+// ---------------------------------------------------------------------------
+
+export const SETTING_NET_TYPES = 'NET_TYPES';
 
 // ---------------------------------------------------------------------------
 // Field length caps (validators clamp longer strings server-side).
@@ -390,6 +398,14 @@ export type ReopenSessionResult =
   | { ok: false; error: 'SESSION_NOT_FOUND' }
   | { ok: false; error: 'ALREADY_OPEN' }
   | { ok: false; error: 'WINDOW_EXPIRED' }
+  | { ok: false; error: 'BUSY_TRY_AGAIN' }
+  | { ok: false; error: 'NOT_CONFIGURED' };
+
+// S5-1 — Net types managed list.
+export type SaveNetTypesResult =
+  | { ok: true }
+  | { ok: false; error: 'NOT_AUTHORIZED' }
+  | { ok: false; error: 'INVALID_INPUT'; field: string; reason: string }
   | { ok: false; error: 'BUSY_TRY_AGAIN' }
   | { ok: false; error: 'NOT_CONFIGURED' };
 

@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: scripts/build.mjs
- * System Version: 1.0.0 | File Version: 2 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 3 | Date: 2026-05-15
+ *   v3: S5-1 — getNetTypes and saveNetTypes shims added.
  *   v2: S5-7 — reopenSession shim added; banner injects File Version into Code.gs.
  *   v1: Initial version tracking. esbuild IIFE bundle; footer shims for Apps Script.
  *
@@ -87,6 +88,9 @@ async function main() {
         'function getRepeaterSystems() { return __app__.getRepeaterSystems.apply(this, arguments); }',
         'function saveTemplate() { return __app__.saveTemplate.apply(this, arguments); }',
         'function deleteTemplate() { return __app__.deleteTemplate.apply(this, arguments); }',
+        // S5-1 functions.
+        'function getNetTypes() { return __app__.getNetTypes.apply(this, arguments); }',
+        'function saveNetTypes() { return __app__.saveNetTypes.apply(this, arguments); }',
       ].join('\n'),
     },
     target: 'es2020',

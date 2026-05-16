@@ -399,10 +399,19 @@ Example: `"W7XYZ 147.320 MHz / 100.0 Hz, K7ABC 442.325 MHz / 100.0 Hz"`
 From entries where `type` does not case-insensitively match `'primary'`, `'linked'`, or `'alternate'`.
 `{{links}}` uses the raw stored `Type` string for display labels.
 
-| Variable | Source |
-|---|---|
-| `{{echolinkNode}}` | `RepeaterName` of first entry where `type.toLowerCase() === 'echolink'`; empty if none |
-| `{{links}}` | All link entries as "Type: RepeaterName", comma-separated |
+Each named variable extracts the `RepeaterName` of the first matching entry (case-insensitive type match); empty string if no matching entry exists.
+
+| Variable | Type match (lowercase) | Typical RepeaterName content |
+|---|---|---|
+| `{{echolinkNode}}` | `'echolink'` | EchoLink node number or callsign-L (e.g. "K7RPT-L") |
+| `{{allstarNode}}` | `'allstar'` | AllStar node number (e.g. "27499") |
+| `{{irlpNode}}` | `'irlp'` | IRLP node number (e.g. "4312") |
+| `{{dstarReflector}}` | `'d-star'` | D-Star reflector and module (e.g. "REF001 C") |
+| `{{dmrTalkgroup}}` | `'dmr'` | DMR talkgroup ID or BrandMeister number (e.g. "31073") |
+| `{{ysfRoom}}` | `'ysf'` | Yaesu System Fusion WIRES-X room name or node (e.g. "K7RPT-L") |
+| `{{hamshackExt}}` | `'hamshack hotline'` | Hamshack Hotline extension number (e.g. "11-503-3000") |
+| `{{hoipExt}}` | `'hams over ip'` | Hams Over IP extension or SIP address |
+| `{{links}}` | *(all link entries)* | All link entries as "Type: RepeaterName", comma-separated |
 
 ### System variable
 
@@ -687,7 +696,8 @@ Chips shown in both Preamble and Credits hint bars:
 {{primaryName}}  {{primaryFrequency}}  {{primaryPlTone}}  {{primaryDescription}}
 {{alternateName}}  {{alternateFrequency}}  {{alternatePlTone}}  {{alternateDescription}}  {{alternateNames}}
 {{linkedNames}}  {{linkedFull}}  {{linkedCount}}  {{linkedCredits}}
-{{echolinkNode}}  {{links}}  {{systemName}}
+{{echolinkNode}}  {{allstarNode}}  {{irlpNode}}  {{dstarReflector}}  {{dmrTalkgroup}}  {{ysfRoom}}  {{hamshackExt}}  {{hoipExt}}
+{{links}}  {{systemName}}
 ```
 
 All text content inserted into DOM via `textContent`. Template text stored as plain strings in Sheet — never rendered as HTML.
@@ -755,7 +765,7 @@ All text content inserted into DOM via `textContent`. Template text stored as pl
 
 ## Open questions
 
-1. **Link type names.** Brian will finalize EchoLink/AllStar/IRLP/etc. display names. Variable names (`{{echolinkNode}}` etc.) updated to match. Schema accepts free-text strings now.
+1. ~~**Link type names.**~~ **RESOLVED 2026-05-15.** Finalized type strings (stored verbatim in `Type` column): `EchoLink`, `AllStar`, `IRLP`, `D-Star`, `DMR`, `YSF` (Yaesu System Fusion), `Hamshack Hotline`, `Hams Over IP`. Each has a named template variable; see Link entry variables table. `{{links}}` remains the catch-all for any unlisted type.
 2. **Repeaters tab migration.** Existing Repeaters tab (from earlier version) lacks `Description` and `ClosingCredit` columns. `setupSheets` should detect and extend. Confirm safe to run against production Sheet.
 3. **D1 closing credit.** Linked system; `{{repeaterCredit}}` = empty string; D1 template Credits section simply does not use it. Acceptable for v1.
 4. **Sessions header migration safety.** Confirm with trustee before running `setupSheets` against production Sheet.
