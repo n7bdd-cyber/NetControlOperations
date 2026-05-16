@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: scripts/build.mjs
- * System Version: 1.0.0 | File Version: 3 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 4 | Date: 2026-05-15
+ *   v4: S5-2 — getNcoLocations and recordNcoLocation shims added.
  *   v3: S5-1 — getNetTypes and saveNetTypes shims added.
  *   v2: S5-7 — reopenSession shim added; banner injects File Version into Code.gs.
  *   v1: Initial version tracking. esbuild IIFE bundle; footer shims for Apps Script.
@@ -91,6 +92,9 @@ async function main() {
         // S5-1 functions.
         'function getNetTypes() { return __app__.getNetTypes.apply(this, arguments); }',
         'function saveNetTypes() { return __app__.saveNetTypes.apply(this, arguments); }',
+        // S5-2 functions.
+        'function getNcoLocations() { return __app__.getNcoLocations.apply(this, arguments); }',
+        'function recordNcoLocation() { return __app__.recordNcoLocation.apply(this, arguments); }',
       ].join('\n'),
     },
     target: 'es2020',

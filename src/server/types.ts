@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: types.ts
- * System Version: 1.0.0 | File Version: 3 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 4 | Date: 2026-05-15
+ *   v4: S5-2 — SETTING_NCO_LOCATIONS constant added.
  *   v3: S5-1 — SETTING_NET_TYPES constant; SaveNetTypesResult type added.
  *   v2: S5-7 — ReopenSessionInput and ReopenSessionResult added.
  *   v1: Initial version tracking. All sheet schemas, column-index constants,
@@ -199,6 +200,7 @@ export const PROP_ROSTER_CSV_DRIVE_FOLDER_ID = 'RosterCsvDriveFolderId';
 // ---------------------------------------------------------------------------
 
 export const SETTING_NET_TYPES = 'NET_TYPES';
+export const SETTING_NCO_LOCATIONS = 'NCO_LOCATIONS';
 
 // ---------------------------------------------------------------------------
 // Field length caps (validators clamp longer strings server-side).

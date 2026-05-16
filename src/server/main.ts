@@ -1,7 +1,9 @@
 /**
  * Project: NetControlOperations
  * File: main.ts
- * System Version: 1.0.0 | File Version: 7 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 9 | Date: 2026-05-15
+ *   v9: S5-2 UX — location list cap raised from 20 to 50.
+ *   v8: S5-2 — getNcoLocations() + recordNcoLocation() for location autocomplete.
  *   v7: S5-1 — getNetTypes() + saveNetTypes() for Settings-driven net type dropdown.
  *   v6: Performance — roster + Others lookups in recordCheckin use findRowData()
  *       to eliminate the extra readRow() Sheets API call after findRowIndex().
@@ -36,6 +38,8 @@
  *   deleteTemplate(templateId)       — soft-deletes a template (sets DeletedAt)
  *   getNetTypes()                    — reads NET_TYPES from Settings; returns string[]
  *   saveNetTypes(types)              — admin-only; writes NET_TYPES to Settings
+ *   getNcoLocations()                — reads NCO_LOCATIONS LRU list from Settings
+ *   recordNcoLocation(location)      — prepends location to LRU list (fire-and-forget)
  *
  * Build: `npm run build` → esbuild bundles this + deps → dist/Code.gs.
  *        scripts/build.mjs hoists exports onto global for Apps Script.
@@ -87,6 +91,7 @@ import {
   SessionsCol,
   SESSION_STATUS_CLOSED,
   SESSION_STATUS_OPEN,
+  SETTING_NCO_LOCATIONS,
   SETTING_NET_TYPES,
   SHEET_CHECKINS,
   SHEET_OTHERS,
@@ -1622,4 +1627,76 @@ export function saveNetTypes(types: string[]): SaveNetTypesResult {
   });
 
   return result === 'BUSY' ? { ok: false, error: 'BUSY_TRY_AGAIN' } : result;
+}
+
+// ---------------------------------------------------------------------------
+// S5-2 — getNcoLocations: read the NCO_LOCATIONS LRU list from Settings.
+// Returns string[] (most recently used first). No lock — read-only.
+// ---------------------------------------------------------------------------
+
+export function getNcoLocations(): string[] {
+  const ss = getSpreadsheetOrNull();
+  if (!ss) return [];
+
+  const settings = getSheetOrNull(ss, SHEET_SETTINGS);
+  if (!settings) return [];
+
+  const row = findRowData(settings, (r) => String(r[0]) === SETTING_NCO_LOCATIONS);
+  if (!row) return [];
+
+  const raw = String(row[1] ?? '').trim();
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((l): l is string => typeof l === 'string' && l.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// S5-2 — recordNcoLocation: prepend location to NCO_LOCATIONS LRU list.
+// Fire-and-forget from client — silently ignores BUSY (not fatal if missed).
+// Deduplicates case-sensitively; caps list at 20 entries.
+// ---------------------------------------------------------------------------
+
+export function recordNcoLocation(location: string): void {
+  const trimmed = typeof location === 'string' ? location.trim() : '';
+  if (!trimmed) return;
+
+  withLock<void>(() => {
+    const ss = getSpreadsheetOrNull();
+    if (!ss) return;
+
+    const settings = getSheetOrNull(ss, SHEET_SETTINGS);
+    if (!settings) return;
+
+    const rowIdx = findRowIndex(settings, (r) => String(r[0]) === SETTING_NCO_LOCATIONS);
+    let locs: string[] = [];
+    if (rowIdx > 0) {
+      const row = readRow(settings, rowIdx);
+      const raw = String(row[1] ?? '').trim();
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          locs = parsed.filter((l): l is string => typeof l === 'string' && l.length > 0);
+        }
+      } catch { locs = []; }
+    }
+
+    // Dedup (case-sensitive), prepend, cap at 50.
+    locs = locs.filter((l) => l !== trimmed);
+    locs.unshift(trimmed);
+    if (locs.length > 50) locs = locs.slice(0, 50);
+
+    const json = JSON.stringify(locs);
+    if (rowIdx > 0) {
+      updateCells(settings, rowIdx, { 2: json });
+    } else {
+      appendRowAndGetIndex(settings, [SETTING_NCO_LOCATIONS, json]);
+    }
+  });
+  // Silently ignore BUSY — skipping a location hint is acceptable.
 }
