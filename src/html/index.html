@@ -2,7 +2,11 @@
 <!--
   Project: NetControlOperations
   File: index.html
-  System Version: 1.0.0 | File Version: 22 | Date: 2026-05-16
+  System Version: 1.0.0 | File Version: 23 | Date: 2026-05-16
+    v23: S5-4 — End Net buttons disabled (hard gate) while any recognition checkbox
+         is explicitly unchecked (sessionStorage '0'); amber soft-gate retained
+         for name-unresolved entries; banner text covers both cases.
+    v22: S5-12 — WinLink Practice Message screen added.
     v21: S5-11 — NTS Practice Message screen; "NTS Practice Message" button on
          screen-log; getNtsPracticeMessage() server call.
     v20: S5-10 — ICS 309/214 export screen; "Export ICS 309/214" button on
@@ -1289,23 +1293,41 @@
       }
 
       function updateEndNetAmber() {
+        // hasUnrecognizedCheckins() only finds keys explicitly set to '0';
+        // End Net needs a completeness gate: any check-in not yet checked off,
+        // including brand-new ones whose sessionStorage key was never written.
+        var hasUnrecog = false;
+        if (NetControl.checkins) {
+          NetControl.checkins.forEach(function(entry) {
+            if (!getRecog(entry.checkinId)) hasUnrecog = true;
+          });
+        }
         var unresolved = 0;
         if (NetControl.checkins) {
           NetControl.checkins.forEach(function(entry) {
             if (!entry.name || entry.name.trim() === '') unresolved++;
           });
         }
-        var isAmber = unresolved > 0;
         ['btn-end', 'btn-end-net-credits'].forEach(function(id) {
           var btn = $(id); if (!btn) return;
-          btn.classList.toggle('btn-amber', isAmber);
+          btn.disabled = hasUnrecog;
+          btn.title = hasUnrecog ? 'Check off each call sign as recognized before ending.' : '';
+          btn.classList.toggle('btn-amber', !hasUnrecog && unresolved > 0);
         });
         var banner = $('end-net-unresolved-banner');
         if (banner) {
-          banner.hidden = !isAmber;
-          banner.textContent = isAmber
-            ? unresolved + ' check-in' + (unresolved === 1 ? '' : 's') + ' have no name match. You can still end — or go back to resolve.'
-            : '';
+          var show = hasUnrecog || unresolved > 0;
+          banner.hidden = !show;
+          if (hasUnrecog && unresolved > 0) {
+            banner.textContent = 'Check off each call sign as recognized before ending.'
+              + ' Also, ' + unresolved + ' check-in' + (unresolved === 1 ? '' : 's') + ' have no name match.';
+          } else if (hasUnrecog) {
+            banner.textContent = 'Check off each call sign as recognized before ending.';
+          } else if (unresolved > 0) {
+            banner.textContent = unresolved + ' check-in' + (unresolved === 1 ? '' : 's') + ' have no name match. You can still end — or go back to resolve.';
+          } else {
+            banner.textContent = '';
+          }
         }
       }
 
