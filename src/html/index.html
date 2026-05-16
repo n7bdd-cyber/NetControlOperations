@@ -2,7 +2,9 @@
 <!--
   Project: NetControlOperations
   File: index.html
-  System Version: 1.0.0 | File Version: 20 | Date: 2026-05-15
+  System Version: 1.0.0 | File Version: 21 | Date: 2026-05-15
+    v21: S5-11 — NTS Practice Message screen; "NTS Practice Message" button on
+         screen-log; getNtsPracticeMessage() server call.
     v20: S5-10 — ICS 309/214 export screen; "Export ICS 309/214" button on
          screen-summary; copyPreText/selectPreText clipboard helpers.
     v19: S5-3 — visitor (Others tab) band3 suffix-tap; gray "visitor" badge on
@@ -411,6 +413,7 @@
         <ul id="checkin-list" class="checkin-list" aria-live="polite"></ul>
 
         <button id="btn-end" class="secondary" type="button">End Net</button>
+        <button id="btn-nts-message" class="secondary" type="button">NTS Practice Message</button>
       </section>
 
       <!-- ═══ Screen 2b: Credits ═══ -->
@@ -462,6 +465,15 @@
         <h2>ICS 214 — Activity Log</h2>
         <button id="btn-copy-214" type="button">Copy ICS 214</button>
         <pre id="ics-214-text" class="ics-pre"></pre>
+      </section>
+
+      <!-- ═══ Screen 4c: NTS Practice Message ═══ -->
+      <section id="screen-nts" aria-labelledby="nts-title">
+        <button id="btn-nts-back" class="secondary" type="button">← Back to Net</button>
+        <h1 id="nts-title">NTS Practice Message</h1>
+        <p class="small">Read this message on air. Tap Copy to share with participants.</p>
+        <button id="btn-copy-nts" type="button">Copy Message</button>
+        <pre id="nts-message-text" class="ics-pre" style="font-size:15px; line-height:1.6;"></pre>
       </section>
 
       <!-- ═══ Screen 5: Template editor ═══ -->
@@ -572,6 +584,7 @@
         others: [],        // OtherEntry[] — loaded at session start by getOthersSnapshot()
         othersLoaded: false,
         icsExportPayload: null, // IcsExportPayload | null — set after successful getIcsExport
+        ntsMessage: null,       // NtsMessage | null — set after successful getNtsPracticeMessage
         // callsign → { checkinId, tapCount, name, resolveAsync, nameSearchFailed }
         checkins: new Map(),
         history: [],
@@ -619,6 +632,7 @@
         'screen-start','screen-preamble','screen-log','screen-credits',
         'screen-end','screen-summary','screen-editor',
         'screen-ics',  // S5-10
+        'screen-nts',  // S5-11
       ];
       function showScreen(id) {
         ALL_SCREENS.forEach(function(sid) {
@@ -1650,6 +1664,7 @@
           roster: [], rosterLoaded: false, rosterLoadError: false,
           others: [], othersLoaded: false,
           icsExportPayload: null,
+          ntsMessage: null,
           manualNameForm: null,
           activeScript: null, repeaterSystem: null, tonightRepeater: null,
           templates: savedTemplates, repeaterSystems: savedSystems, isAdmin: savedIsAdmin,
@@ -2189,6 +2204,25 @@
         }
       }
 
+      function onNtsMessage() {
+        if (!NetControl.sessionId) return;
+        toast('Generating…');
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (!result || !result.ok) {
+              toast('Could not generate: ' + (result && result.error ? result.error : 'unknown'));
+              return;
+            }
+            NetControl.ntsMessage = result.message;
+            $('nts-message-text').textContent = result.message.formattedText;
+            showScreen('screen-nts');
+          })
+          .withFailureHandler(function() {
+            toast('Generate failed — try again.');
+          })
+          .getNtsPracticeMessage(NetControl.sessionId);
+      }
+
       function onIcsExport() {
         if (!NetControl.sessionId) return;
         toast('Generating…');
@@ -2370,6 +2404,13 @@
         $('btn-ics-back').addEventListener('click', function() { showScreen('screen-summary'); });
         $('btn-copy-309').addEventListener('click', function() { copyPreText('ics-309-text'); });
         $('btn-copy-214').addEventListener('click', function() { copyPreText('ics-214-text'); });
+
+        // Screen 2 → NTS message
+        $('btn-nts-message').addEventListener('click', onNtsMessage);
+
+        // Screen 4c: NTS message
+        $('btn-nts-back').addEventListener('click', function() { showScreen('screen-log'); });
+        $('btn-copy-nts').addEventListener('click', function() { copyPreText('nts-message-text'); });
 
         // FCC ID timer + chip: tap any to reset (screen-log and screen-credits)
         ['fcc-timer', 'fcc-timer-credits', 'fcc-id-chip', 'fcc-id-chip-credits'].forEach(function(id) {

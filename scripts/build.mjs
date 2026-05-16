@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: scripts/build.mjs
- * System Version: 1.0.0 | File Version: 6 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 7 | Date: 2026-05-15
+ *   v7: S5-11 — getNtsPracticeMessage shim added.
  *   v6: S5-10 — getIcsExport shim added.
  *   v5: S5-3 — getOthersSnapshot shim added.
  *   v4: S5-2 — getNcoLocations and recordNcoLocation shims added.
@@ -101,6 +102,8 @@ async function main() {
         'function getOthersSnapshot() { return __app__.getOthersSnapshot.apply(this, arguments); }',
         // S5-10 functions.
         'function getIcsExport() { return __app__.getIcsExport.apply(this, arguments); }',
+        // S5-11 functions.
+        'function getNtsPracticeMessage() { return __app__.getNtsPracticeMessage.apply(this, arguments); }',
       ].join('\n'),
     },
     target: 'es2020',

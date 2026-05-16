@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: main.ts
- * System Version: 1.0.0 | File Version: 11 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 12 | Date: 2026-05-15
+ *   v12: S5-11 — getNtsPracticeMessage() generates NTS on-air reading script.
  *   v11: S5-10 — getIcsExport() builds ICS 309 and ICS 214 plain-text reports.
  *   v10: S5-3 — getOthersSnapshot() for visitor band3 suffix-tap.
  *   v9: S5-2 UX — location list cap raised from 20 to 50.
@@ -118,6 +119,8 @@ import {
   type Ics214Payload,
   type IcsExportPayload,
   type IcsExportResult,
+  type NtsMessage,
+  type NtsMessageResult,
   type GetTemplatesResult,
   type NetTemplate,
   type ReconcileResult,
@@ -964,6 +967,109 @@ export function getIcsExport(sessionId: string): IcsExportResult {
   };
 
   return { ok: true, payload };
+}
+
+// ---------------------------------------------------------------------------
+// S5-11 — getNtsPracticeMessage: builds a formatted NTS practice message from
+// an open session. Read-only; no LockService.
+// ---------------------------------------------------------------------------
+
+const NTS_MONTH_ABBREVS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+export function getNtsPracticeMessage(sessionId: string): NtsMessageResult {
+  if (!sessionId || !isValidIdField(sessionId, MAX_ID_FIELD)) {
+    return { ok: false, error: 'INVALID_INPUT', field: 'sessionId', reason: 'missing or too long' };
+  }
+
+  const ss = getSpreadsheetOrNull();
+  if (!ss) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  const sessionsSheet = getSheetOrNull(ss, SHEET_SESSIONS);
+  if (!sessionsSheet) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  let sessRow: unknown[] | null;
+  try {
+    sessRow = findRowData(sessionsSheet, (row) => String(row[SessionsCol.SessionID]) === sessionId);
+  } catch (e) {
+    Logger.log(`getNtsPracticeMessage: sessions read threw: ${String(e)}`);
+    return { ok: false, error: 'NOT_CONFIGURED' };
+  }
+  if (!sessRow) return { ok: false, error: 'SESSION_NOT_FOUND' };
+  if (String(sessRow[SessionsCol.Status]) !== SESSION_STATUS_OPEN) {
+    return { ok: false, error: 'SESSION_CLOSED' };
+  }
+
+  const ncoCallsign  = String(sessRow[SessionsCol.NCOCallsign]  ?? '').trim();
+  const ncoName      = String(sessRow[SessionsCol.NCOName]      ?? '').trim();
+  const ncoLocation  = String(sessRow[SessionsCol.NCOLocation]  ?? '').trim();
+  const netType      = String(sessRow[SessionsCol.NetType]      ?? '').trim();
+  const netDate      = String(sessRow[SessionsCol.NetDate]      ?? '').trim(); // "YYYY-MM-DD"
+  const netTime      = String(sessRow[SessionsCol.NetTime]      ?? '').trim(); // "HH:mm"
+
+  // Parse date parts.
+  const dateParts = netDate.split('-');
+  const year      = dateParts[0] || '';
+  const monthIdx  = parseInt(dateParts[1] || '1', 10) - 1;
+  const dayInt    = parseInt(dateParts[2] || '1', 10);
+  const monthAbbr = NTS_MONTH_ABBREVS[monthIdx] ?? 'JAN';
+
+  const dateFiled      = `${monthAbbr} ${dayInt}`;                   // "MAY 15"
+  const dateFormatted  = `${dayInt} ${monthAbbr} ${year}`;           // "15 MAY 2026"
+  const timeFiled      = netTime.replace(':', '');                    // "1900"
+  const messageNumber  = sessionId.slice(0, 6).toLowerCase() + '-001';
+  const stationOfOrigin = ncoCallsign.toUpperCase();
+  const placeOfOrigin   = ncoLocation.trim() || ncoCallsign.toUpperCase();
+  const signature       = ncoName.trim() || ncoCallsign.toUpperCase();
+  const ncoLocationUpper = ncoLocation.trim().toUpperCase() || 'QTH';
+
+  const messageText = (
+    `THIS IS A PRACTICE MESSAGE FROM THE ${netType.toUpperCase()} ON ${dateFormatted}. ` +
+    `NET CONTROL IS ${stationOfOrigin} LOCATED IN ${ncoLocationUpper}. ` +
+    `PLEASE ACKNOWLEDGE RECEIPT. END.`
+  );
+
+  // ARL check = word count excluding terminal "END." token.
+  const tokens = messageText.trim().split(/\s+/);
+  const arlCheck = tokens[tokens.length - 1] === 'END.' ? tokens.length - 1 : tokens.length;
+
+  const formattedText = [
+    'NTS TRAFFIC FOLLOWS — ONE MESSAGE',
+    '',
+    `ROUTINE  (pause)  NO HANDLING INSTRUCTIONS`,
+    '',
+    `NUMBER ${messageNumber}  (pause)  ${stationOfOrigin}  (pause)  CHECK ${arlCheck}`,
+    `${placeOfOrigin}  (pause)  ${dateFiled}  (pause)  ${timeFiled}`,
+    '',
+    `TO: NET PARTICIPANTS`,
+    `    WASHINGTON COUNTY ARES NET`,
+    `    HILLSBORO OR 97123`,
+    '',
+    `MESSAGE: ${messageText}`,
+    '',
+    `SIGNED: ${signature}`,
+    '',
+    'END OF TRAFFIC',
+  ].join('\n');
+
+  const message: NtsMessage = {
+    precedence:           'ROUTINE',
+    handlingInstructions: '',
+    messageNumber,
+    stationOfOrigin,
+    arlCheck,
+    placeOfOrigin,
+    dateFiled,
+    timeFiled,
+    addresseeName:    'NET PARTICIPANTS',
+    addresseeAddress: 'WASHINGTON COUNTY ARES NET',
+    addresseeCity:    'HILLSBORO OR 97123',
+    addresseePhone:   '',
+    messageText,
+    signature,
+    formattedText,
+  };
+
+  return { ok: true, message };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: types.ts
- * System Version: 1.0.0 | File Version: 6 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 7 | Date: 2026-05-15
+ *   v7: S5-11 — NtsMessage interface and NtsMessageResult type added.
  *   v6: S5-10 — ICS 309/214 export interfaces and IcsExportResult type added.
  *   v5: S5-3 — OtherEntry interface and GetOthersSnapshotResult type added.
  *   v4: S5-2 — SETTING_NCO_LOCATIONS constant added.
@@ -531,6 +532,33 @@ export interface ResolveNameResult {
   name: string | null;
   fccName: string | null;
 }
+
+// S5-11 — NTS Practice Message.
+
+export interface NtsMessage {
+  precedence:           string;   // "ROUTINE"
+  handlingInstructions: string;   // blank for v1
+  messageNumber:        string;   // e.g. "abc123-001"
+  stationOfOrigin:      string;
+  arlCheck:             number;   // word count of messageText (excluding "END")
+  placeOfOrigin:        string;
+  dateFiled:            string;   // "MAY 15"
+  timeFiled:            string;   // "1900"
+  addresseeName:        string;
+  addresseeAddress:     string;
+  addresseeCity:        string;
+  addresseePhone:       string;   // blank
+  messageText:          string;
+  signature:            string;
+  formattedText:        string;   // ready for display in <pre>
+}
+
+export type NtsMessageResult =
+  | { ok: true;  message: NtsMessage }
+  | { ok: false; error: 'SESSION_NOT_FOUND' }
+  | { ok: false; error: 'SESSION_CLOSED' }
+  | { ok: false; error: 'INVALID_INPUT'; field: string; reason: string }
+  | { ok: false; error: 'NOT_CONFIGURED' };
 
 export interface ReconcileResult {
   checked: number;
