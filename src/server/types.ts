@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: types.ts
- * System Version: 1.0.0 | File Version: 7 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 8 | Date: 2026-05-15
+ *   v8: S5-12 — WinlinkMessage interface and WinlinkMessageResult type added.
  *   v7: S5-11 — NtsMessage interface and NtsMessageResult type added.
  *   v6: S5-10 — ICS 309/214 export interfaces and IcsExportResult type added.
  *   v5: S5-3 — OtherEntry interface and GetOthersSnapshotResult type added.
@@ -555,6 +556,25 @@ export interface NtsMessage {
 
 export type NtsMessageResult =
   | { ok: true;  message: NtsMessage }
+  | { ok: false; error: 'SESSION_NOT_FOUND' }
+  | { ok: false; error: 'SESSION_CLOSED' }
+  | { ok: false; error: 'INVALID_INPUT'; field: string; reason: string }
+  | { ok: false; error: 'NOT_CONFIGURED' };
+
+// S5-12 — WinLink Practice Message.
+
+export interface WinlinkMessage {
+  to:            string;   // "W6BA@winlink.org"
+  cc:            string;   // blank
+  from:          string;   // "{ncoCallsign}@winlink.org"
+  subject:       string;
+  date:          string;   // display-only date string
+  body:          string;   // plain text body
+  formattedText: string;   // ready for display in <pre>
+}
+
+export type WinlinkMessageResult =
+  | { ok: true;  message: WinlinkMessage }
   | { ok: false; error: 'SESSION_NOT_FOUND' }
   | { ok: false; error: 'SESSION_CLOSED' }
   | { ok: false; error: 'INVALID_INPUT'; field: string; reason: string }

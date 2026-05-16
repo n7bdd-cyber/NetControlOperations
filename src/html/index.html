@@ -2,7 +2,7 @@
 <!--
   Project: NetControlOperations
   File: index.html
-  System Version: 1.0.0 | File Version: 21 | Date: 2026-05-15
+  System Version: 1.0.0 | File Version: 22 | Date: 2026-05-16
     v21: S5-11 — NTS Practice Message screen; "NTS Practice Message" button on
          screen-log; getNtsPracticeMessage() server call.
     v20: S5-10 — ICS 309/214 export screen; "Export ICS 309/214" button on
@@ -414,6 +414,7 @@
 
         <button id="btn-end" class="secondary" type="button">End Net</button>
         <button id="btn-nts-message" class="secondary" type="button">NTS Practice Message</button>
+        <button id="btn-winlink-message" class="secondary" type="button">WinLink Practice Message</button>
       </section>
 
       <!-- ═══ Screen 2b: Credits ═══ -->
@@ -474,6 +475,15 @@
         <p class="small">Read this message on air. Tap Copy to share with participants.</p>
         <button id="btn-copy-nts" type="button">Copy Message</button>
         <pre id="nts-message-text" class="ics-pre" style="font-size:15px; line-height:1.6;"></pre>
+      </section>
+
+      <!-- ═══ Screen 4d: WinLink practice message (S5-12) ═══ -->
+      <section id="screen-winlink" aria-labelledby="winlink-title">
+        <button id="btn-winlink-back" class="secondary" type="button">← Back to Net</button>
+        <h1 id="winlink-title">WinLink Practice Message</h1>
+        <p class="small">Read this message on air. Tap Copy to share with participants.</p>
+        <button id="btn-copy-winlink" type="button">Copy Message</button>
+        <pre id="winlink-message-text" class="ics-pre" style="font-size:15px; line-height:1.6;"></pre>
       </section>
 
       <!-- ═══ Screen 5: Template editor ═══ -->
@@ -585,6 +595,7 @@
         othersLoaded: false,
         icsExportPayload: null, // IcsExportPayload | null — set after successful getIcsExport
         ntsMessage: null,       // NtsMessage | null — set after successful getNtsPracticeMessage
+        winlinkMessage: null,   // WinlinkMessage | null — set after successful getWinlinkPracticeMessage
         // callsign → { checkinId, tapCount, name, resolveAsync, nameSearchFailed }
         checkins: new Map(),
         history: [],
@@ -633,6 +644,7 @@
         'screen-end','screen-summary','screen-editor',
         'screen-ics',  // S5-10
         'screen-nts',  // S5-11
+        'screen-winlink',  // S5-12
       ];
       function showScreen(id) {
         ALL_SCREENS.forEach(function(sid) {
@@ -1665,6 +1677,7 @@
           others: [], othersLoaded: false,
           icsExportPayload: null,
           ntsMessage: null,
+          winlinkMessage: null,
           manualNameForm: null,
           activeScript: null, repeaterSystem: null, tonightRepeater: null,
           templates: savedTemplates, repeaterSystems: savedSystems, isAdmin: savedIsAdmin,
@@ -2223,6 +2236,25 @@
           .getNtsPracticeMessage(NetControl.sessionId);
       }
 
+      function onWinlinkMessage() {
+        if (!NetControl.sessionId) return;
+        toast('Generating…');
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (!result || !result.ok) {
+              toast('Could not generate: ' + (result && result.error ? result.error : 'unknown'));
+              return;
+            }
+            NetControl.winlinkMessage = result.message;
+            $('winlink-message-text').textContent = result.message.formattedText;
+            showScreen('screen-winlink');
+          })
+          .withFailureHandler(function() {
+            toast('Generate failed — try again.');
+          })
+          .getWinlinkPracticeMessage(NetControl.sessionId);
+      }
+
       function onIcsExport() {
         if (!NetControl.sessionId) return;
         toast('Generating…');
@@ -2411,6 +2443,13 @@
         // Screen 4c: NTS message
         $('btn-nts-back').addEventListener('click', function() { showScreen('screen-log'); });
         $('btn-copy-nts').addEventListener('click', function() { copyPreText('nts-message-text'); });
+
+        // Screen 2 → WinLink message
+        $('btn-winlink-message').addEventListener('click', onWinlinkMessage);
+
+        // Screen 4d: WinLink message
+        $('btn-winlink-back').addEventListener('click', function() { showScreen('screen-log'); });
+        $('btn-copy-winlink').addEventListener('click', function() { copyPreText('winlink-message-text'); });
 
         // FCC ID timer + chip: tap any to reset (screen-log and screen-credits)
         ['fcc-timer', 'fcc-timer-credits', 'fcc-id-chip', 'fcc-id-chip-credits'].forEach(function(id) {

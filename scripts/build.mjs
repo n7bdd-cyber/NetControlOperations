@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: scripts/build.mjs
- * System Version: 1.0.0 | File Version: 7 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 8 | Date: 2026-05-15
+ *   v8: S5-12 — getWinlinkPracticeMessage shim added.
  *   v7: S5-11 — getNtsPracticeMessage shim added.
  *   v6: S5-10 — getIcsExport shim added.
  *   v5: S5-3 — getOthersSnapshot shim added.
@@ -104,6 +105,8 @@ async function main() {
         'function getIcsExport() { return __app__.getIcsExport.apply(this, arguments); }',
         // S5-11 functions.
         'function getNtsPracticeMessage() { return __app__.getNtsPracticeMessage.apply(this, arguments); }',
+        // S5-12 functions.
+        'function getWinlinkPracticeMessage() { return __app__.getWinlinkPracticeMessage.apply(this, arguments); }',
       ].join('\n'),
     },
     target: 'es2020',
