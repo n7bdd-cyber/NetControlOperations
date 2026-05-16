@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: scripts/build.mjs
- * System Version: 1.0.0 | File Version: 4 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 5 | Date: 2026-05-15
+ *   v5: S5-3 — getOthersSnapshot shim added.
  *   v4: S5-2 — getNcoLocations and recordNcoLocation shims added.
  *   v3: S5-1 — getNetTypes and saveNetTypes shims added.
  *   v2: S5-7 — reopenSession shim added; banner injects File Version into Code.gs.
@@ -95,6 +96,8 @@ async function main() {
         // S5-2 functions.
         'function getNcoLocations() { return __app__.getNcoLocations.apply(this, arguments); }',
         'function recordNcoLocation() { return __app__.recordNcoLocation.apply(this, arguments); }',
+        // S5-3 functions.
+        'function getOthersSnapshot() { return __app__.getOthersSnapshot.apply(this, arguments); }',
       ].join('\n'),
     },
     target: 'es2020',

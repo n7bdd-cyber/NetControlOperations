@@ -2,7 +2,9 @@
 <!--
   Project: NetControlOperations
   File: index.html
-  System Version: 1.0.0 | File Version: 18 | Date: 2026-05-15
+  System Version: 1.0.0 | File Version: 19 | Date: 2026-05-15
+    v19: S5-3 — visitor (Others tab) band3 suffix-tap; gray "visitor" badge on
+         candidate buttons; getOthersSnapshot() fired at session start.
     v18: S5-2 UX — arrow-key navigation in location dropdown; Enter to select,
          Escape to close; selected item scrolls into view.
     v17: S5-2 UX — replace <datalist> with custom filterable dropdown; typing
@@ -136,6 +138,11 @@
         display: inline-block; margin-left: 8px; padding: 2px 8px; font-size: 14px;
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         background: #ffd966; color: #111; border-radius: 10px; font-weight: 600;
+      }
+      .visitor-badge {
+        display: inline-block; margin-left: 8px; padding: 2px 8px; font-size: 14px;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: #d0d0d0; color: #333; border-radius: 10px; font-weight: 600;
       }
       .toast {
         position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
@@ -537,6 +544,8 @@
         ncoName: '', ncoLocation: '',
         netTypes: [],      // string[] — loaded once on page load by loadNetTypes()
         ncoLocations: [],  // string[] — sorted A-Z, loaded by loadNcoLocations()
+        others: [],        // OtherEntry[] — loaded at session start by getOthersSnapshot()
+        othersLoaded: false,
         // callsign → { checkinId, tapCount, name, resolveAsync, nameSearchFailed }
         checkins: new Map(),
         history: [],
@@ -811,24 +820,39 @@
         var rosterByCallsign = new Map();
         NetControl.roster.forEach(function(e) { rosterByCallsign.set(e.callsign, e); });
 
-        var band1 = [], band1Set = new Set();
+        var allSeen = new Set(); // dedup across all bands
+
+        var band1 = [];
         for (var i = 0; i < NetControl.history.length; i++) {
           var cs = NetControl.history[i];
-          if (!NetControl.checkins.has(cs) || !cs.endsWith(suffix) || band1Set.has(cs)) continue;
+          if (!NetControl.checkins.has(cs) || !cs.endsWith(suffix) || allSeen.has(cs)) continue;
           var rr = rosterByCallsign.get(cs);
-          band1.push({ callsign: cs, name: rr ? rr.name : '', licenseClass: rr ? rr.licenseClass : '', recent: true });
-          band1Set.add(cs);
+          band1.push({ callsign: cs, name: rr ? rr.name : '', licenseClass: rr ? rr.licenseClass : '', recent: true, fromOthers: false });
+          allSeen.add(cs);
           if (band1.length >= MAX_CANDIDATES) break;
         }
 
         var band2 = [];
         for (var j = 0; j < NetControl.roster.length && band1.length + band2.length < MAX_CANDIDATES; j++) {
           var r = NetControl.roster[j];
-          if (!band1Set.has(r.callsign) && r.callsign.endsWith(suffix)) {
-            band2.push({ callsign: r.callsign, name: r.name, licenseClass: r.licenseClass, recent: false });
+          if (!allSeen.has(r.callsign) && r.callsign.endsWith(suffix)) {
+            band2.push({ callsign: r.callsign, name: r.name, licenseClass: r.licenseClass, recent: false, fromOthers: false });
+            allSeen.add(r.callsign);
           }
         }
-        return band1.concat(band2);
+
+        var band3 = [];
+        if (NetControl.othersLoaded) {
+          for (var k = 0; k < NetControl.others.length && band1.length + band2.length + band3.length < MAX_CANDIDATES; k++) {
+            var oe = NetControl.others[k];
+            if (!allSeen.has(oe.callsign) && oe.callsign.toUpperCase().endsWith(suffix)) {
+              band3.push({ callsign: oe.callsign, name: oe.name, licenseClass: '', recent: false, fromOthers: true });
+              allSeen.add(oe.callsign);
+            }
+          }
+        }
+
+        return band1.concat(band2).concat(band3);
       }
 
       function onCandidatesKeydown(e) {
@@ -850,6 +874,11 @@
             var chip = document.createElement('span');
             chip.className = 'recent-badge'; chip.textContent = 'this net';
             btn.appendChild(document.createTextNode(' ')); btn.appendChild(chip);
+          }
+          if (c.fromOthers) {
+            var vchip = document.createElement('span');
+            vchip.className = 'visitor-badge'; vchip.textContent = 'visitor';
+            btn.appendChild(document.createTextNode(' ')); btn.appendChild(vchip);
           }
           li.appendChild(btn); ul.appendChild(li);
         });
@@ -878,6 +907,7 @@
         NetControl.history = [];
         NetControl.inFlightCheckin = null;
         NetControl.roster = []; NetControl.rosterLoaded = false; NetControl.rosterLoadError = false;
+        NetControl.others = []; NetControl.othersLoaded = false;
         NetControl.manualNameForm = null;
         renderCounters(); renderList(null); stopFccTimer(); stopOopsCountdown();
         var panel = $('script-panel');
@@ -1477,7 +1507,7 @@
             setTimeout(function() { $('f-callsign').focus(); }, 0);
           }
 
-          // Fire-and-forget roster fetch.
+          // Fire-and-forget roster + others fetches in parallel.
           var fetchSessionId = NetControl.sessionId;
           callWithRetry('getRosterSnapshot', {}).then(function(snap) {
             if (NetControl.sessionId !== fetchSessionId) return;
@@ -1489,6 +1519,13 @@
             if (NetControl.sessionId !== fetchSessionId) return;
             NetControl.rosterLoadError = true;
           });
+          // Others (visitors) — non-blocking; failure just leaves band3 empty.
+          callWithRetry('getOthersSnapshot', {}).then(function(snap) {
+            if (NetControl.sessionId !== fetchSessionId) return;
+            if (snap && snap.ok) {
+              NetControl.others = snap.others; NetControl.othersLoaded = true;
+            }
+          }).catch(function() { /* silent — band3 stays empty */ });
         } catch(e) {
           toast('Network error — try again.');
         } finally {
@@ -1583,6 +1620,7 @@
           checkins: new Map(), history: [],
           inFlightStart: null, inFlightCheckin: null,
           roster: [], rosterLoaded: false, rosterLoadError: false,
+          others: [], othersLoaded: false,
           manualNameForm: null,
           activeScript: null, repeaterSystem: null, tonightRepeater: null,
           templates: savedTemplates, repeaterSystems: savedSystems, isAdmin: savedIsAdmin,

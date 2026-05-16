@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: main.ts
- * System Version: 1.0.0 | File Version: 9 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 10 | Date: 2026-05-15
+ *   v10: S5-3 — getOthersSnapshot() for visitor band3 suffix-tap.
  *   v9: S5-2 UX — location list cap raised from 20 to 50.
  *   v8: S5-2 — getNcoLocations() + recordNcoLocation() for location autocomplete.
  *   v7: S5-1 — getNetTypes() + saveNetTypes() for Settings-driven net type dropdown.
@@ -107,6 +108,7 @@ import {
   type EndSessionInput,
   type EndSessionResult,
   type GetRepeaterSystemsResult,
+  type GetOthersSnapshotResult,
   type GetRosterSnapshotResult,
   type GetTemplatesResult,
   type NetTemplate,
@@ -118,6 +120,7 @@ import {
   type RepeaterEntry,
   type RepeaterSystem,
   type ResolveNameResult,
+  type OtherEntry,
   type RosterEntry,
   type SaveNetTypesResult,
   type SaveTemplateInput,
@@ -656,6 +659,49 @@ export function getRosterSnapshot(): GetRosterSnapshotResult {
   }
 
   return { ok: true, roster: Array.from(seen.values()) };
+}
+
+// ---------------------------------------------------------------------------
+// S5-3 — getOthersSnapshot: returns callsign+name for every row in the Others
+// tab. Used by the client for band3 (visitor) suffix-tap candidates.
+// Read-only; no LockService needed.
+// ---------------------------------------------------------------------------
+
+export function getOthersSnapshot(): GetOthersSnapshotResult {
+  const ss = getSpreadsheetOrNull();
+  if (!ss) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  let sheet: GoogleAppsScript.Spreadsheet.Sheet | null;
+  try {
+    sheet = getSheetOrNull(ss, SHEET_OTHERS);
+  } catch (e) {
+    Logger.log(`getOthersSnapshot: getSheetByName threw: ${String(e)}`);
+    return { ok: false, error: 'READ_FAILED' };
+  }
+  if (!sheet) return { ok: false, error: 'NOT_CONFIGURED' };
+
+  let values: unknown[][];
+  try {
+    values = sheet.getDataRange().getValues();
+  } catch (e) {
+    Logger.log(`getOthersSnapshot: getValues threw: ${String(e)}`);
+    return { ok: false, error: 'READ_FAILED' };
+  }
+
+  const others: OtherEntry[] = [];
+  for (let i = 1; i < values.length; i++) {
+    try {
+      const row = values[i];
+      const callsign = String(row[OthersCol.Callsign] ?? '').trim();
+      if (!callsign || !isValidCallsign(callsign)) continue;
+      const name = String(row[OthersCol.Name] ?? '').trim();
+      others.push({ callsign, name });
+    } catch (e) {
+      Logger.log(`getOthersSnapshot: row ${i} threw: ${String(e)}`);
+    }
+  }
+
+  return { ok: true, others };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,8 @@
 /**
  * Project: NetControlOperations
  * File: types.ts
- * System Version: 1.0.0 | File Version: 4 | Date: 2026-05-15
+ * System Version: 1.0.0 | File Version: 5 | Date: 2026-05-15
+ *   v5: S5-3 — OtherEntry interface and GetOthersSnapshotResult type added.
  *   v4: S5-2 — SETTING_NCO_LOCATIONS constant added.
  *   v3: S5-1 — SETTING_NET_TYPES constant; SaveNetTypesResult type added.
  *   v2: S5-7 — ReopenSessionInput and ReopenSessionResult added.
@@ -440,6 +441,18 @@ export type GetRosterSnapshotResult =
   | { ok: false; error: 'NOT_CONFIGURED' }
   // getDataRange().getValues() threw — typically a transient Apps Script /
   // Sheets API error or a quota exhaustion.
+  | { ok: false; error: 'READ_FAILED' };
+
+// S5-3 — visitor/others snapshot for client-side band3 suffix-tap.
+
+export interface OtherEntry {
+  callsign: string;
+  name: string; // blank when FCC lookup hasn't run yet
+}
+
+export type GetOthersSnapshotResult =
+  | { ok: true;  others: OtherEntry[] }
+  | { ok: false; error: 'NOT_CONFIGURED' }
   | { ok: false; error: 'READ_FAILED' };
 
 // Slice 3 — async FCC name resolution.
