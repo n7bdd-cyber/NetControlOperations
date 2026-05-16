@@ -1,5 +1,17 @@
 /**
- * Format validators for user-supplied strings.
+ * Project: NetControlOperations
+ * File: validators.ts
+ * System Version: 1.0.0 | File Version: 1 | Date: 2026-05-15
+ *   v1: Initial version tracking. Callsign, date, time, and text validators.
+ *
+ * Description: Format validators and string utilities for user-supplied input.
+ *   isValidCallsign(s)             — FCC US amateur callsign format check
+ *   isLikelySuffixOnly(s)          — 1–4 char bare-suffix detection
+ *   isValidIsoDate(s)              — YYYY-MM-DD
+ *   isValidIsoTime(s)              — HH:MM
+ *   clampString(value, max)        — trims + truncates to max chars
+ *   isValidIdField(s, maxLen)      — non-empty string within length limit
+ *   isValidRequiredText(s, maxLen) — non-empty trimmed string within limit
  *
  * Teaching notes:
  *  - Every exported function takes `unknown` (or `string`) and returns a

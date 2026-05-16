@@ -1,5 +1,21 @@
 /**
- * Sheet access helpers.
+ * Project: NetControlOperations
+ * File: sheets.ts
+ * System Version: 1.0.0 | File Version: 2 | Date: 2026-05-15
+ *   v2: findRowData() added — returns matching row data in one getValues() call,
+ *       avoiding the findRowIndex + readRow double-API-call pattern.
+ *   v1: Initial version tracking. All Sheet access helpers for Slices 1–4.
+ *
+ * Description: Low-level Google Sheets access helpers used by main.ts.
+ *   getSpreadsheetOrNull()              — opens Spreadsheet by ScriptProperty; null if missing
+ *   getSheetOrNull(ss, name)            — returns Sheet by name or null
+ *   getOrCreateSheetWithHeader(ss, …)   — creates tab + writes header row if absent
+ *   appendRowAndGetIndex(sheet, values) — appendRow + flush + returns 0-based row index
+ *   findRowIndex(sheet, col, value)     — linear scan; returns 1-based row number
+ *   findRowData(sheet, predicate)       — linear scan; returns matching row data or null
+ *   readRow(sheet, rowIndex)            — reads all cells of a row as unknown[]
+ *   updateCells(sheet, rowIndex, cells) — writes specific columns of a row
+ *   withLock(fn)                        — ScriptLock wrapper; returns 'BUSY' on timeout
  *
  * Teaching notes:
  *  - All Sheet read/write paths in the server code go through this module so
@@ -99,6 +115,23 @@ export function findRowIndex(
     }
   }
   return -1;
+}
+
+/**
+ * Like findRowIndex but returns the matching row's data array directly.
+ * One getDataRange().getValues() call — avoids the findRowIndex + readRow
+ * double-API-call pattern when the caller needs both index and data.
+ * Returns null if no row matches. Header row (index 0) is skipped.
+ */
+export function findRowData(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  predicate: (row: unknown[]) => boolean,
+): unknown[] | null {
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (predicate(values[i])) return values[i];
+  }
+  return null;
 }
 
 /**

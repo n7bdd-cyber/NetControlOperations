@@ -1,5 +1,24 @@
 /**
- * Shared types and constants for the server modules.
+ * Project: NetControlOperations
+ * File: types.ts
+ * System Version: 1.0.0 | File Version: 2 | Date: 2026-05-15
+ *   v2: S5-7 — ReopenSessionInput and ReopenSessionResult added.
+ *   v1: Initial version tracking. All sheet schemas, column-index constants,
+ *       and result interfaces for Slices 1–4 (including Repeaters / Templates).
+ *
+ * Description: Shared types and constants imported by all server modules.
+ *   Sheet header arrays: SESSIONS_HEADERS, CHECKINS_HEADERS, ROSTER_HEADERS,
+ *     OTHERS_HEADERS, SETTINGS_HEADERS, TEMPLATES_HEADERS, REPEATERS_HEADERS
+ *   Column-index objects: SessionsCol, CheckinsCol, RosterCol, OthersCol,
+ *     TemplatesCol, RepeatersCol
+ *   Tab name constants: SHEET_SESSIONS … SHEET_REPEATERS
+ *   Script property keys: PROP_SPREADSHEET_ID, PROP_ADMIN_EMAILS, etc.
+ *   MAX_* length caps; SESSION_STATUS_* constants; SOURCE_MANUAL
+ *   Interfaces: OthersEntry, TemplateSection, NetTemplate, RepeaterEntry,
+ *     RepeaterSystem, RosterEntry, StartSessionInput, RecordCheckinInput,
+ *     EndSessionInput, ReopenSessionInput, SaveTemplateInput,
+ *     ResolveNameResult, ReconcileResult
+ *   Result union types for every exported server function
  *
  * Teaching notes:
  *  - `export` makes a name visible to other files that `import` from this one.
@@ -358,6 +377,19 @@ export type EndSessionResult =
     }
   | { ok: false; error: 'INVALID_INPUT'; field: string; reason: string }
   | { ok: false; error: 'SESSION_NOT_FOUND' }
+  | { ok: false; error: 'BUSY_TRY_AGAIN' }
+  | { ok: false; error: 'NOT_CONFIGURED' };
+
+export interface ReopenSessionInput {
+  sessionId: string;
+}
+
+export type ReopenSessionResult =
+  | { ok: true }
+  | { ok: false; error: 'INVALID_INPUT'; field: string; reason: string }
+  | { ok: false; error: 'SESSION_NOT_FOUND' }
+  | { ok: false; error: 'ALREADY_OPEN' }
+  | { ok: false; error: 'WINDOW_EXPIRED' }
   | { ok: false; error: 'BUSY_TRY_AGAIN' }
   | { ok: false; error: 'NOT_CONFIGURED' };
 

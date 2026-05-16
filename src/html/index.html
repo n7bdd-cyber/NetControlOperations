@@ -1,4 +1,30 @@
 <!doctype html>
+<!--
+  Project: NetControlOperations
+  File: index.html
+  System Version: 1.0.0 | File Version: 9 | Date: 2026-05-15
+    v9: Bug fix — applyCheckinResult applies name from dedup response when entry
+        has no name yet (covers callWithRetry retry-after-timeout scenario).
+    v8: Layout fix — header strip moved above script panel on check-in page.
+    v7: S5-5 fix — add [hidden]{display:none!important} to prevent CSS specificity
+        from overriding the hidden attribute on .fcc-id-chip at startup.
+    v6: S5-7 — "Oops! Undo" button on screen-summary; 30-second countdown
+        after endSession success; reopenSession() server call; stopOopsCountdown
+        wired into onNewNet.
+    v5: S5-5 — "Transmit ID Now" chip at 0:30; count-up (+M:SS) after 0:00;
+        chip tap also resets timer; chip visible on both screen-log and credits.
+    v4: S5-4 — End Net buttons turn amber when check-ins have no name match;
+        warning banner on screen-end; updateEndNetAmber() wired to all name
+        change paths (recordCheckin, resolveName, setManualName, onEndTap).
+    v3: S5-6 + S5-8 — hold duration 1.5 s → 0.75 s; full-height background
+        fill replaces 4 px strip; z-index guard + pointer-events: none added.
+    v2: S5-5 — FCC ID timer added to screen-credits; red threshold at 0:30.
+    v1: Slices 1–4 — session start/end, check-ins, suffix-tap, templates,
+        repeater systems, net-script teleprompter, hold-to-advance editor.
+  Description: Single-page Net Control web app served via HtmlService.
+    Screens: start, preamble, log, credits, end, summary, editor.
+    All server calls via google.script.run with callWithRetry wrapper.
+-->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -7,6 +33,7 @@
     <style>
       /* WCAG-AA contrast; 48px tap targets. */
       * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
       html, body {
         margin: 0; padding: 0;
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -96,6 +123,11 @@
         max-width: 90%; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       }
       .small { font-size: 15px; color: #555; }
+      .warning-banner {
+        background: #fff3cd; color: #664d03;
+        border: 1px solid #ffc107; border-radius: 6px;
+        padding: 10px 12px; margin: 12px 0; font-size: 15px;
+      }
       .fcc-timer {
         display: inline-block; font-size: 15px; font-weight: 700;
         padding: 2px 10px; border-radius: 8px; background: #e8f4e8; color: #1a5c1a;
@@ -103,6 +135,17 @@
       }
       .fcc-timer.amber { background: #fff3cd; color: #664d03; }
       .fcc-timer.red   { background: #fde8e8; color: #b00020; }
+      /* S5-5: Transmit ID Now chip — pulsing pill at ≤0:30 */
+      .fcc-id-chip {
+        display: inline-block; font-size: 13px; font-weight: 700;
+        padding: 2px 8px; border-radius: 10px;
+        background: #b00020; color: #fff;
+        margin-left: 6px; vertical-align: middle; cursor: pointer;
+        animation: fcc-pulse 0.8s ease-in-out infinite alternate;
+      }
+      @keyframes fcc-pulse { from { opacity: 1; } to { opacity: 0.45; } }
+      /* S5-7: Oops undo button */
+      button.btn-oops { background: #fff3cd; color: #664d03; border: 2px solid #ffc107; }
 
       /* ── Slice 4: Script panel ── */
       .script-panel-wrap {
@@ -125,15 +168,18 @@
       }
       .script-progress { font-size: 14px; color: #555; margin: 4px 0; }
 
-      /* Hold-to-advance fill bar */
+      /* Hold-to-advance full-background fill (WCAG: full-height progress indicator) */
       .hold-btn { position: relative; overflow: hidden; }
       .hold-btn::after {
-        content: ''; position: absolute; bottom: 0; left: 0;
-        height: 4px; width: 0%;
-        background: rgba(255,255,255,0.65);
+        content: ''; position: absolute; top: 0; left: 0;
+        height: 100%; width: 0%;
+        background: rgba(255,255,255,0.30);
         transition: width 0s;
+        z-index: 0;
+        pointer-events: none;
       }
-      .hold-btn.holding::after { width: 100%; transition: width 1.5s linear; }
+      .hold-btn.holding::after { width: 100%; transition: width 0.75s linear; }
+      .hold-btn > * { position: relative; z-index: 1; }
       button.btn-amber { background: #b07d00; }
       button.btn-amber:hover { background: #9a6a00; }
 
@@ -258,6 +304,18 @@
       <!-- ═══ Screen 2: Logging ═══ -->
       <section id="screen-log" aria-labelledby="log-title">
 
+        <div class="header-strip">
+          <h1 id="log-title">
+            <span id="hdr-nco"></span> &middot; <span id="hdr-type"></span> &middot; <span id="hdr-time"></span>
+            <span id="fcc-timer" class="fcc-timer" role="button" tabindex="0"
+                  aria-label="FCC ID timer — tap to reset">10:00</span>
+            <span id="fcc-id-chip" class="fcc-id-chip" hidden
+                  role="button" tabindex="0" aria-live="polite"
+                  aria-label="Transmit ID Now — tap to reset timer">Transmit ID Now</span>
+          </h1>
+          <p class="counters"><span id="cnt-total">0</span> check-ins &middot; <span id="cnt-unique">0</span> unique</p>
+        </div>
+
         <!-- Script panel — shown when activeScript.phase === 'section' -->
         <div id="script-panel" class="script-panel-wrap" hidden>
           <div class="script-panel-header">
@@ -268,15 +326,6 @@
           <div id="section-calltoair-text" class="script-calltoair"></div>
           <div id="section-notes-text" class="script-notes" hidden></div>
           <button id="btn-next-section" class="hold-btn" type="button">Click and Hold for Next Section</button>
-        </div>
-
-        <div class="header-strip">
-          <h1 id="log-title">
-            <span id="hdr-nco"></span> &middot; <span id="hdr-type"></span> &middot; <span id="hdr-time"></span>
-            <span id="fcc-timer" class="fcc-timer" role="button" tabindex="0"
-                  aria-label="FCC ID timer — tap to reset">10:00</span>
-          </h1>
-          <p class="counters"><span id="cnt-total">0</span> check-ins &middot; <span id="cnt-unique">0</span> unique</p>
         </div>
 
         <label for="f-callsign">Callsign</label>
@@ -300,7 +349,13 @@
 
       <!-- ═══ Screen 2b: Credits ═══ -->
       <section id="screen-credits" aria-labelledby="credits-title">
-        <h1 id="credits-title">Net Script — Credits</h1>
+        <h1 id="credits-title">Net Script — Credits
+          <span id="fcc-timer-credits" class="fcc-timer" role="button" tabindex="0"
+                aria-label="FCC ID timer — tap to reset">10:00</span>
+          <span id="fcc-id-chip-credits" class="fcc-id-chip" hidden
+                role="button" tabindex="0" aria-live="polite"
+                aria-label="Transmit ID Now — tap to reset timer">Transmit ID Now</span>
+        </h1>
         <div id="credits-text" class="script-calltoair"></div>
         <button id="btn-end-net-credits" type="button">End Net</button>
       </section>
@@ -311,6 +366,7 @@
         <p><span id="end-type"></span> &middot; <span id="end-time"></span></p>
         <p class="counters">Total check-ins: <span id="end-total">0</span></p>
         <p class="counters">Unique callsigns: <span id="end-unique">0</span></p>
+        <div id="end-net-unresolved-banner" class="warning-banner" hidden></div>
         <button id="btn-end-confirm" type="button">Confirm End</button>
         <button id="btn-end-cancel" class="secondary" type="button">Cancel</button>
       </section>
@@ -322,6 +378,7 @@
         <p><span id="sum-unique">0</span> unique callsigns.</p>
         <p><span id="sum-hours">0</span> hours total (flat 0.5/callsign).</p>
         <a id="btn-open-sheet" href="#" target="_blank" rel="noopener"><button type="button">Open Sheet</button></a>
+        <button id="btn-oops" class="btn-oops" type="button" hidden>Oops! Undo (<span id="oops-countdown">30</span>s)</button>
         <button id="btn-new-net" class="secondary" type="button">Start new net</button>
       </section>
 
@@ -461,7 +518,9 @@
         '{{alternateName}}','{{alternateFrequency}}','{{alternatePlTone}}',
         '{{alternateDescription}}','{{alternateNames}}',
         '{{linkedNames}}','{{linkedFull}}','{{linkedCount}}','{{linkedCredits}}',
-        '{{echolinkNode}}','{{links}}','{{systemName}}',
+        '{{echolinkNode}}','{{allstarNode}}','{{irlpNode}}','{{dstarReflector}}',
+        '{{dmrTalkgroup}}','{{ysfRoom}}','{{hamshackExt}}','{{hoipExt}}',
+        '{{links}}','{{systemName}}',
       ];
 
       // ─────────────────────────────────────────────────────────────────────
@@ -569,7 +628,7 @@
           (function(cid) {
             chk.addEventListener('change', function() {
               setRecog(cid, chk.checked);
-              updateNextSectionAmber();
+              updateNextSectionAmber(); updateEndNetAmber();
             });
           })(entry.checkinId);
           recogWrap.appendChild(chk);
@@ -642,7 +701,7 @@
                 if (typed.length > MAX_NAME_LEN) { toast('Name too long (max ' + MAX_NAME_LEN + ' chars).'); return; }
                 if (CSV_INJECT_RE.test(typed)) { toast('Name cannot start with = + - @'); return; }
                 entryRef.name = typed; entryRef.nameSearchFailed = false;
-                NetControl.manualNameForm = null; renderList(null);
+                NetControl.manualNameForm = null; renderList(null); updateEndNetAmber();
                 google.script.run
                   .withSuccessHandler(function() {})
                   .withFailureHandler(function() {
@@ -682,7 +741,7 @@
             } else {
               entry.nameSearchFailed = true;
             }
-            renderList(null);
+            renderList(null); updateEndNetAmber();
           })
           .withFailureHandler(function() {
             var entry = NetControl.checkins.get(callsign);
@@ -768,7 +827,7 @@
         NetControl.inFlightCheckin = null;
         NetControl.roster = []; NetControl.rosterLoaded = false; NetControl.rosterLoadError = false;
         NetControl.manualNameForm = null;
-        renderCounters(); renderList(null); stopFccTimer();
+        renderCounters(); renderList(null); stopFccTimer(); stopOopsCountdown();
         var panel = $('script-panel');
         if (panel) panel.hidden = true;
       }
@@ -782,6 +841,9 @@
           entry.name = result.resolvedName || null;
           entry.resolveAsync = !!result.resolveAsync;
           entry.nameSearchFailed = false;
+        } else if (result.resolvedName && !entry.name) {
+          // Dedup retry: first response was lost; server returned stored name — apply it.
+          entry.name = result.resolvedName;
         }
         NetControl.checkins.set(callsign, entry);
         NetControl.history = [callsign].concat(NetControl.history.filter(function(c) { return c !== callsign; }));
@@ -818,7 +880,7 @@
           applyCheckinResult(callsign, result);
           NetControl.inFlightCheckin = null;
           renderCounters(); renderList(result.deduped ? null : callsign);
-          updateNextSectionAmber();
+          updateNextSectionAmber(); updateEndNetAmber();
           $('candidates-row').hidden = true; $('btn-log').disabled = false;
           $('f-callsign').disabled = false;
           document.removeEventListener('keydown', onCandidatesKeydown);
@@ -839,18 +901,28 @@
       var fccTimerSecondsLeft = 600;
 
       function updateFccTimerDisplay() {
-        var el = $('fcc-timer'); if (!el) return;
-        var m = Math.floor(fccTimerSecondsLeft / 60);
-        var s = fccTimerSecondsLeft % 60;
-        el.textContent = m + ':' + String(s).padStart(2, '0');
-        el.classList.remove('amber', 'red');
-        if (fccTimerSecondsLeft <= 0) el.classList.add('red');
-        else if (fccTimerSecondsLeft <= 120) el.classList.add('amber');
+        var secs = fccTimerSecondsLeft;
+        var abs = Math.abs(secs);
+        var m = Math.floor(abs / 60);
+        var s = abs % 60;
+        var display = (secs < 0 ? '+' : '') + m + ':' + String(s).padStart(2, '0');
+        var cls = secs <= 30 ? 'red' : secs <= 120 ? 'amber' : '';
+        var showChip = secs <= 30;
+        ['fcc-timer', 'fcc-timer-credits'].forEach(function(id) {
+          var el = $(id); if (!el) return;
+          el.textContent = display;
+          el.classList.remove('amber', 'red');
+          if (cls) el.classList.add(cls);
+        });
+        ['fcc-id-chip', 'fcc-id-chip-credits'].forEach(function(id) {
+          var el = $(id); if (!el) return;
+          el.hidden = !showChip;
+        });
       }
       function startFccTimer() {
         stopFccTimer(); fccTimerSecondsLeft = 600; updateFccTimerDisplay();
         fccTimerInterval = setInterval(function() {
-          if (fccTimerSecondsLeft > 0) fccTimerSecondsLeft--;
+          fccTimerSecondsLeft--;
           updateFccTimerDisplay();
         }, 1000);
       }
@@ -859,6 +931,53 @@
         fccTimerSecondsLeft = 600;
       }
       function resetFccTimer() { fccTimerSecondsLeft = 600; updateFccTimerDisplay(); }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // S5-7: Oops countdown (30-second window to undo endSession)
+      // ─────────────────────────────────────────────────────────────────────
+      var oopsCountdownInterval = null;
+
+      function startOopsCountdown() {
+        var btn = $('btn-oops'); if (!btn) return;
+        var span = $('oops-countdown');
+        var secs = 30;
+        if (span) span.textContent = secs;
+        btn.hidden = false; btn.disabled = false;
+        oopsCountdownInterval = setInterval(function() {
+          secs--;
+          if (span) span.textContent = secs;
+          if (secs <= 0) {
+            clearInterval(oopsCountdownInterval); oopsCountdownInterval = null;
+            btn.hidden = true;
+          }
+        }, 1000);
+      }
+
+      function stopOopsCountdown() {
+        if (oopsCountdownInterval !== null) {
+          clearInterval(oopsCountdownInterval); oopsCountdownInterval = null;
+        }
+        var btn = $('btn-oops'); if (btn) btn.hidden = true;
+      }
+
+      async function onOops() {
+        var btn = $('btn-oops');
+        if (btn) btn.disabled = true;
+        stopOopsCountdown();
+        try {
+          var result = await callWithRetry('reopenSession', { sessionId: NetControl.sessionId });
+          if (!result || !result.ok) {
+            toast(result && result.error === 'WINDOW_EXPIRED'
+              ? 'Undo window expired — net is closed.'
+              : 'Could not reopen net.');
+            return;
+          }
+          startFccTimer();
+          showScreen('screen-log');
+          setTimeout(function() { var f = $('f-callsign'); if (f) f.focus(); }, 0);
+        } catch(e) { toast('Network error — could not undo.'); }
+        finally { if (btn) btn.disabled = false; }
+      }
 
       // ─────────────────────────────────────────────────────────────────────
       // Server call helpers
@@ -953,16 +1072,34 @@
           v['linkedCredits'] = linked.map(function(l) { return l.closingCredit; }).filter(Boolean).join('\n');
 
           var links = system.links;
-          var echoEntry = null;
+          var echoEntry = null, allstarEntry = null, irlpEntry = null, dstarEntry = null,
+              dmrEntry = null, ysfEntry = null, hamshackEntry = null, hoipEntry = null;
           for (var li = 0; li < links.length; li++) {
-            if (links[li].type.toLowerCase() === 'echolink') { echoEntry = links[li]; break; }
+            var lt = links[li].type.toLowerCase();
+            if      (lt === 'echolink'         && !echoEntry)     echoEntry     = links[li];
+            else if (lt === 'allstar'           && !allstarEntry)  allstarEntry  = links[li];
+            else if (lt === 'irlp'             && !irlpEntry)     irlpEntry     = links[li];
+            else if (lt === 'd-star'           && !dstarEntry)    dstarEntry    = links[li];
+            else if (lt === 'dmr'              && !dmrEntry)      dmrEntry      = links[li];
+            else if (lt === 'ysf'              && !ysfEntry)      ysfEntry      = links[li];
+            else if (lt === 'hamshack hotline' && !hamshackEntry) hamshackEntry = links[li];
+            else if (lt === 'hams over ip'     && !hoipEntry)     hoipEntry     = links[li];
           }
-          v['echolinkNode'] = echoEntry ? echoEntry.repeaterName : '';
+          v['echolinkNode']   = echoEntry     ? echoEntry.repeaterName     : '';
+          v['allstarNode']    = allstarEntry  ? allstarEntry.repeaterName  : '';
+          v['irlpNode']       = irlpEntry     ? irlpEntry.repeaterName     : '';
+          v['dstarReflector'] = dstarEntry    ? dstarEntry.repeaterName    : '';
+          v['dmrTalkgroup']   = dmrEntry      ? dmrEntry.repeaterName      : '';
+          v['ysfRoom']        = ysfEntry      ? ysfEntry.repeaterName      : '';
+          v['hamshackExt']    = hamshackEntry ? hamshackEntry.repeaterName : '';
+          v['hoipExt']        = hoipEntry     ? hoipEntry.repeaterName     : '';
           v['links'] = links.map(function(l) { return l.type + ': ' + l.repeaterName; }).join(', ');
         } else {
           ['systemName','primaryName','primaryFrequency','primaryPlTone','primaryDescription',
            'alternateName','alternateFrequency','alternatePlTone','alternateDescription','alternateNames',
-           'linkedNames','linkedFull','linkedCount','linkedCredits','echolinkNode','links'].forEach(function(k) { v[k] = ''; });
+           'linkedNames','linkedFull','linkedCount','linkedCredits',
+           'echolinkNode','allstarNode','irlpNode','dstarReflector','dmrTalkgroup','ysfRoom','hamshackExt','hoipExt',
+           'links'].forEach(function(k) { v[k] = ''; });
           v['linkedCount'] = '0';
         }
         return v;
@@ -1007,13 +1144,34 @@
 
         var nextBtn = $('btn-next-section');
         nextBtn.textContent = (script.sectionIndex === total - 1) ? 'Click and Hold for Credits' : 'Click and Hold for Next Section';
-        updateNextSectionAmber();
+        updateNextSectionAmber(); updateEndNetAmber();
       }
 
       function updateNextSectionAmber() {
         var btn = $('btn-next-section');
         if (!btn || !NetControl.activeScript || NetControl.activeScript.phase !== 'section') return;
         btn.classList.toggle('btn-amber', hasUnrecognizedCheckins());
+      }
+
+      function updateEndNetAmber() {
+        var unresolved = 0;
+        if (NetControl.checkins) {
+          NetControl.checkins.forEach(function(entry) {
+            if (!entry.name || entry.name.trim() === '') unresolved++;
+          });
+        }
+        var isAmber = unresolved > 0;
+        ['btn-end', 'btn-end-net-credits'].forEach(function(id) {
+          var btn = $(id); if (!btn) return;
+          btn.classList.toggle('btn-amber', isAmber);
+        });
+        var banner = $('end-net-unresolved-banner');
+        if (banner) {
+          banner.hidden = !isAmber;
+          banner.textContent = isAmber
+            ? unresolved + ' check-in' + (unresolved === 1 ? '' : 's') + ' have no name match. You can still end — or go back to resolve.'
+            : '';
+        }
       }
 
       // ─────────────────────────────────────────────────────────────────────
@@ -1027,7 +1185,7 @@
           btn.classList.add('holding');
           holdTimer = setTimeout(function() {
             holdTimer = null; btn.classList.remove('holding'); onComplete();
-          }, 1500);
+          }, 750);
         }
         function cancelHold() {
           if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
@@ -1317,13 +1475,13 @@
           applyCheckinResult(raw, result);
           NetControl.inFlightCheckin = null;
           renderCounters(); renderList(result.deduped ? null : raw);
-          updateNextSectionAmber();
+          updateNextSectionAmber(); updateEndNetAmber();
           $('f-callsign').value = ''; $('f-callsign').focus();
         } catch(e) { toast('Network error — try again.'); }
         finally { $('btn-log').disabled = false; }
       }
 
-      function onEndTap() { showScreen('screen-end'); }
+      function onEndTap() { updateEndNetAmber(); showScreen('screen-end'); }
       function onEndCancel() { showScreen('screen-log'); setTimeout(function() { $('f-callsign').focus(); }, 0); }
 
       async function onEndConfirm() {
@@ -1337,6 +1495,7 @@
           $('sum-hours').textContent  = result.hoursTotal;
           $('btn-open-sheet').href    = result.spreadsheetUrl;
           showScreen('screen-summary');
+          startOopsCountdown();
         } catch(e) { toast('Network error — try again.'); }
         finally { $('btn-end-confirm').disabled = false; }
       }
@@ -1358,7 +1517,7 @@
         ['f-net-type','f-nco','f-nco-name','f-nco-location','f-repeater','f-notes','f-callsign'].forEach(function(id) {
           var el = $(id); if (el) el.value = '';
         });
-        clearAllStartErrors(); initStartDefaults(); stopFccTimer();
+        clearAllStartErrors(); initStartDefaults(); stopFccTimer(); stopOopsCountdown();
         // Re-initialize dropdowns with current data.
         if (NetControl.repeaterSystems.length > 0) updateRepeaterSystemDropdown();
         updateNetScriptDropdown();
@@ -1519,7 +1678,7 @@
           $('ed-admin-controls').hidden = false;
           var delBtn = $('btn-delete-template');
           delBtn.disabled = t.isDefault;
-          delBtn.title = t.isDefault ? 'Cannot delete the default template' : 'Hold 1.5 s to delete';
+          delBtn.title = t.isDefault ? 'Cannot delete the default template' : 'Hold 0.75 s to delete';
         }
 
         $('ed-form').hidden = false;
@@ -1752,14 +1911,17 @@
         // Screen 4: Summary
         $('btn-new-net').addEventListener('click', onNewNet);
 
-        // FCC ID timer: tap to reset
-        var timerEl = $('fcc-timer');
-        if (timerEl) {
-          timerEl.addEventListener('click', resetFccTimer);
-          timerEl.addEventListener('keydown', function(e) {
+        // FCC ID timer + chip: tap any to reset (screen-log and screen-credits)
+        ['fcc-timer', 'fcc-timer-credits', 'fcc-id-chip', 'fcc-id-chip-credits'].forEach(function(id) {
+          var el = $(id); if (!el) return;
+          el.addEventListener('click', resetFccTimer);
+          el.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); resetFccTimer(); }
           });
-        }
+        });
+
+        // Screen 4: Oops undo
+        $('btn-oops').addEventListener('click', onOops);
 
         // Suffix-Tap: candidate click delegation + cancel
         $('candidates-list').addEventListener('click', function(e) {

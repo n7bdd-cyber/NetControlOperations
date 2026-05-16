@@ -1,9 +1,41 @@
 /**
- * Entry-point functions exposed to Apps Script.
+ * Project: NetControlOperations
+ * File: main.ts
+ * System Version: 1.0.0 | File Version: 6 | Date: 2026-05-15
+ *   v6: Performance — roster + Others lookups in recordCheckin use findRowData()
+ *       to eliminate the extra readRow() Sheets API call after findRowIndex().
+ *   v5: Bug fix — dedup response in recordCheckin now returns the stored name
+ *       from the Checkins row so callWithRetry retries don't lose the name.
+ *   v4: Diagnostic — Logger.log added to recordCheckin roster name-lookup path.
+ *   v3: Bug fix — roster callsign lookup in recordCheckin now trims whitespace,
+ *       matching getRosterSnapshot behavior. Trailing spaces in Roster cells
+ *       caused silent name-lookup miss and returned resolvedName: null.
+ *   v2: S5-7 — reopenSession() added; 5-minute reopen window after endSession.
+ *   v1: Initial version tracking. Slices 1–4 complete; seedDefaultRepeaters
+ *       expanded with AllStar / IRLP / D-Star / DMR / YSF / Hamshack Hotline /
+ *       Hams Over IP link-type placeholder rows.
  *
- * After `npm run build`, esbuild bundles this file (and all its dependencies)
- * into dist/Code.gs. The footer in scripts/build.mjs hoists every exported
- * function in this file onto the global object so Apps Script can find them.
+ * Description: Entry-point server functions bundled into dist/Code.gs by esbuild.
+ *   doGet()                          — serves index.html via HtmlService
+ *   startSession(input)              — opens a new Sessions row
+ *   recordCheckin(input)             — records a check-in or increments tap count
+ *   endSession(input)                — closes session, computes totals + hours
+ *   reopenSession(input)             — reverses endSession within 5-minute window
+ *   setupSheets()                    — creates / migrates sheet tabs + seeds data
+ *   getRosterSnapshot()              — active roster entries for client-side cache
+ *   resolveName(callsign, checkinId) — FCC callook lookup; writes name to Others + Checkins
+ *   setManualName(callsign, id, name)— NCO-supplied name override
+ *   reconcileOthersNames()           — backfills names from latest FCC results
+ *   sundaySync()                     — scheduled weekly roster + callook sync
+ *   installSundaySyncTrigger()       — registers the Sunday-midnight cron trigger
+ *   getAdminStatus()                 — true if caller's email is in AdminEmails
+ *   getTemplates()                   — all active NetTemplate rows
+ *   getRepeaterSystems()             — active repeater systems grouped by name
+ *   saveTemplate(input)              — create or update a NetTemplate row
+ *   deleteTemplate(templateId)       — soft-deletes a template (sets DeletedAt)
+ *
+ * Build: `npm run build` → esbuild bundles this + deps → dist/Code.gs.
+ *        scripts/build.mjs hoists exports onto global for Apps Script.
  *
  * Teaching notes:
  *  - Discriminated unions: `Result = Success | Failure1 | Failure2 | ...`. We
@@ -72,6 +104,8 @@ import {
   type ReconcileResult,
   type RecordCheckinInput,
   type RecordCheckinResult,
+  type ReopenSessionInput,
+  type ReopenSessionResult,
   type RepeaterEntry,
   type RepeaterSystem,
   type ResolveNameResult,
@@ -85,6 +119,7 @@ import {
 } from './types';
 import {
   appendRowAndGetIndex,
+  findRowData,
   findRowIndex,
   getOrCreateSheetWithHeader,
   getSheetOrNull,
@@ -250,7 +285,8 @@ export function recordCheckin(input: RecordCheckinInput): RecordCheckinResult {
           tapCount: Number(existingRow[CheckinsCol.TapCount]) || 0,
           deduped: true,
           resolveAsync: false,
-          resolvedName: null,
+          // Return the stored name so a retry that missed the first response can still show it.
+          resolvedName: String(existingRow[CheckinsCol.Name] ?? '').trim() || null,
         };
       }
       // Genuine re-tap.
@@ -282,13 +318,14 @@ export function recordCheckin(input: RecordCheckinInput): RecordCheckinResult {
 
     const rosterSheet = getSheetOrNull(ss, SHEET_ROSTER);
     if (rosterSheet) {
-      const rosterRowIdx = findRowIndex(
+      // findRowData returns the matching row in one getValues() call —
+      // avoids a second readRow() API call after findRowIndex().
+      const rosterRow = findRowData(
         rosterSheet,
-        (row) => String(row[RosterCol.Callsign]) === input.callsign,
+        (row) => String(row[RosterCol.Callsign] ?? '').trim() === input.callsign,
       );
-      if (rosterRowIdx > 0) {
+      if (rosterRow) {
         // Roster member: resolve name directly from Roster.
-        const rosterRow = readRow(rosterSheet, rosterRowIdx);
         const rosterName = String(rosterRow[RosterCol.Name] ?? '').trim();
         resolvedName = rosterName || null;
         // resolveAsync stays false — no FCC lookup needed for roster members.
@@ -439,6 +476,49 @@ export function endSession(input: EndSessionInput): EndSessionResult {
       spreadsheetUrl,
       alreadyClosed: false,
     };
+  });
+
+  return result === 'BUSY' ? { ok: false, error: 'BUSY_TRY_AGAIN' } : result;
+}
+
+// ---------------------------------------------------------------------------
+// reopenSession — S5-7 "Oops" undo. Reverses endSession within 5 minutes.
+// ---------------------------------------------------------------------------
+
+export function reopenSession(input: ReopenSessionInput): ReopenSessionResult {
+  if (!isValidIdField(input?.sessionId, MAX_ID_FIELD)) {
+    return { ok: false, error: 'INVALID_INPUT', field: 'sessionId', reason: 'must be a non-empty string ≤64 chars' };
+  }
+
+  const result = withLock<ReopenSessionResult>(() => {
+    const ss = getSpreadsheetOrNull();
+    if (!ss) return { ok: false, error: 'NOT_CONFIGURED' as const };
+
+    const sessions = getSheetOrNull(ss, SHEET_SESSIONS);
+    if (!sessions) return { ok: false, error: 'NOT_CONFIGURED' as const };
+
+    const sessionRowIdx = findRowIndex(
+      sessions,
+      (row) => String(row[SessionsCol.SessionID]) === input.sessionId,
+    );
+    if (sessionRowIdx < 0) return { ok: false, error: 'SESSION_NOT_FOUND' as const };
+
+    const row = readRow(sessions, sessionRowIdx);
+    if (String(row[SessionsCol.Status]) === SESSION_STATUS_OPEN) {
+      return { ok: false, error: 'ALREADY_OPEN' as const };
+    }
+
+    const endTimestamp = String(row[SessionsCol.EndTimestamp] ?? '');
+    const endMs = endTimestamp ? new Date(endTimestamp).getTime() : NaN;
+    if (isNaN(endMs) || Date.now() - endMs > 300000) {
+      return { ok: false, error: 'WINDOW_EXPIRED' as const };
+    }
+
+    updateCells(sessions, sessionRowIdx, {
+      [SessionsCol.Status + 1]: SESSION_STATUS_OPEN,
+      [SessionsCol.EndTimestamp + 1]: '',
+    });
+    return { ok: true };
   });
 
   return result === 'BUSY' ? { ok: false, error: 'BUSY_TRY_AGAIN' } : result;
@@ -1100,7 +1180,14 @@ function seedDefaultRepeaters(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
     ['Oregon ARES D1', '(trustee fills)', '147.040 MHz', '100.0 Hz', 'linked',    4, false, '', ''],
     ['Oregon ARES D1', '(trustee fills)', '146.720 MHz', '114.8 Hz', 'linked',    5, false, 'Wikiup Mountain', ''],
     ['Oregon ARES D1', '(trustee fills)', '146.840 MHz', '',         'alternate', 6, false, '', ''],
-    ['Oregon ARES D1', 'K7RPT-L',         '',            '',         'EchoLink',  7, false, 'K7RPT-L repeater connection', ''],
+    ['Oregon ARES D1', 'K7RPT-L',         '',            '',         'EchoLink',         7,  false, 'K7RPT-L repeater connection',       ''],
+    ['Oregon ARES D1', '(trustee fills)', '',            '',         'AllStar',          8,  false, 'AllStar node number',               ''],
+    ['Oregon ARES D1', '(trustee fills)', '',            '',         'IRLP',             9,  false, 'IRLP node number',                  ''],
+    ['Oregon ARES D1', '(trustee fills)', '',            '',         'D-Star',           10, false, 'D-Star reflector and module',       ''],
+    ['Oregon ARES D1', '(trustee fills)', '',            '',         'DMR',              11, false, 'DMR talkgroup ID',                  ''],
+    ['Oregon ARES D1', '(trustee fills)', '',            '',         'YSF',              12, false, 'Yaesu System Fusion room',          ''],
+    ['Oregon ARES D1', '(trustee fills)', '',            '',         'Hamshack Hotline', 13, false, 'Hamshack Hotline extension number', ''],
+    ['Oregon ARES D1', '(trustee fills)', '',            '',         'Hams Over IP',     14, false, 'Hams Over IP extension or address', ''],
   ];
   [...washCoRows, ...d1Rows].forEach((r) => sheet.appendRow(r as unknown[]));
 }
